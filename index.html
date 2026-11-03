@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f6f7fb">
+    <meta name="description" content="Level up your knowledge with short, thoughtful quizzes on Atlas Learn.">
+    <title>Atlas Learn — Make every answer count</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&family=Nunito:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+        <a class="brand" href="#home" aria-label="Atlas Learn home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 40 40"><path d="M20 4 36 11v9c0 8.5-6.2 13.1-16 16C10.2 33.1 4 28.5 4 20v-9L20 4Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="m10 15 10-5 10 5-10 5-10-5Z" fill="currentColor" opacity=".2" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M13 21c4-2 10-2 14 0v7c-4-2-10-2-14 0v-7Zm7-1v9m10-14v7m0 0-2-2m2 2 2-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="brand-name">atlas<span>learn</span></span>
+        </a>
+        <div class="nav-caption">WORKSPACE</div>
+        <nav class="nav-list" id="nav-list"></nav>
+        <div class="sidebar-bottom">
+          <div class="mini-premium">
+            <div class="premium-sparkle">✦</div>
+            <strong>Curious for more?</strong>
+            <span>Explore your next level.</span>
+            <button type="button" class="mini-premium-link" data-page="premium">Explore Plus <span aria-hidden="true">→</span></button>
+          </div>
+          <div class="sidebar-user" id="sidebar-user"></div>
+        </div>
+      </aside>
+
+      <div class="app-main">
+        <header class="topbar">
+          <button type="button" class="icon-button mobile-menu" id="mobile-menu" aria-label="Open navigation" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+          </button>
+          <div class="breadcrumb"><span>Workspace</span><span class="crumb-divider">/</span><strong id="current-page-label">Home</strong></div>
+          <div class="topbar-actions">
+            <span class="demo-pill"><span></span> Demo mode</span>
+            <button type="button" class="icon-button notification-button" aria-label="Notifications are off" title="Manage notifications in Settings" data-page="settings">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
+              <i class="notification-dot"></i>
+            </button>
+            <button type="button" class="top-avatar" id="top-avatar" aria-label="Open profile"></button>
+          </div>
+        </header>
+        <main class="content" id="main-content" tabindex="-1"></main>
+      </div>
+      <div class="mobile-scrim" id="mobile-scrim"></div>
+      <div class="toast-region" id="toast-region" role="status" aria-live="polite"></div>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>
