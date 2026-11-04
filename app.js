@@ -90,7 +90,7 @@ const quizzes = [
 ];
 
 const navItems = [
-  ['home', 'Home', 'home'], ['explore', 'Explore quizzes', 'explore'], ['categories', 'Categories', 'categories'],
+  ['home', 'Home', 'home'], ['explore', 'Explore quizzes', 'explore'], ['categories', 'Categories', 'categories'], ['learn', 'Learn', 'explore'], ['quiz-builder', 'Quiz studio', 'explore'],
   ['premium', 'Premium', 'premium'], ['plus', 'Atlas Plus', 'premium'], ['rewards', 'Rewards', 'rewards'], ['leaderboard', 'Leaderboard', 'leaderboard'],
   ['profile', 'My profile', 'profile'], ['settings', 'Settings', 'settings'], ['auth', 'Sign in / sign up', 'profile']
 ];
@@ -98,11 +98,21 @@ const storageKey = 'atlas-learn-demo-v1';
 let storageReadFailed = false;
 let membershipMigrationNeeded = false;
 const defaultState = {
-  profile: { name: 'Alex Morgan', email: '', avatar: 'AM', signedIn: true, membership: null, membershipStartedAt: '', membershipExpiresAt: '' },
+  profile: {
+    name: 'Alex Morgan', email: '', avatar: 'AM', signedIn: true, membership: null, membershipStartedAt: '', membershipExpiresAt: '',
+    education: {
+      countryId: 'KE', countryName: 'Kenya', curriculumId: '', levelId: '', gradeId: '',
+      preferredSubjectIds: [], recentSubjectIds: [], pathwayId: '', combinationId: '',
+      facultyId: '', programmeId: '', academicYearId: '', semesterId: '', subjectId: '', topicId: ''
+    }
+  },
   settings: { theme: 'light', font: 'DM Sans', fontSize: 15, notifications: false, sound: false, reducedMotion: false },
   stats: { xp: 0, points: 0, quizzes: 0, correct: 0, streak: 0, lastActiveDate: '', activeDates: [], completedChallenges: [] },
   history: [],
-  certificates: []
+  certificates: [],
+  customQuestions: [],
+  quizAttempts: [],
+  topicPerformance: {}
 };
 
 function loadState() {
@@ -117,12 +127,56 @@ function loadState() {
       settings: { ...defaultState.settings, ...saved.settings },
       stats: { ...defaultState.stats, ...saved.stats },
       history: Array.isArray(saved.history) ? saved.history : [],
-      certificates: Array.isArray(saved.certificates) ? saved.certificates : []
+      certificates: Array.isArray(saved.certificates) ? saved.certificates : [],
+      customQuestions: Array.isArray(saved.customQuestions) ? saved.customQuestions : [],
+      quizAttempts: Array.isArray(saved.quizAttempts) ? saved.quizAttempts : [],
+      topicPerformance: saved.topicPerformance && typeof saved.topicPerformance === 'object' ? saved.topicPerformance : {}
     };
     const validFonts = ['DM Sans', 'Inter', 'Poppins', 'Montserrat', 'Outfit', 'Roboto', 'Space Grotesk', 'Nunito', 'Nunito Sans'];
     const numberOrDefault = (value, fallback = 0) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : fallback;
     restored.profile.name = typeof restored.profile.name === 'string' ? restored.profile.name.slice(0, 40) : defaultState.profile.name;
     restored.profile.email = typeof restored.profile.email === 'string' ? restored.profile.email.slice(0, 120) : '';
+    const savedEducation = saved.profile?.education && typeof saved.profile.education === 'object' ? saved.profile.education : {};
+    restored.profile.education = { ...defaultState.profile.education, ...savedEducation };
+    const education = restored.profile.education;
+    education.countryId = typeof education.countryId === 'string' ? education.countryId.slice(0, 8) : 'KE';
+    education.countryName = typeof education.countryName === 'string' ? education.countryName.slice(0, 80) : 'Kenya';
+    education.levelId = AtlasEducation.getById(AtlasEducation.levels, education.levelId)?.id || '';
+    education.curriculumId = AtlasEducation.getCurricula(education.levelId)
+      .some(item => item.id === education.curriculumId) ? education.curriculumId : '';
+    education.gradeId = AtlasEducation.getGrades(education.levelId, education.curriculumId)
+      .some(item => item.id === education.gradeId) ? education.gradeId : '';
+    education.pathwayId = AtlasEducation.pathways.some(item => item.id === education.pathwayId) ? education.pathwayId : '';
+    const pathway = AtlasEducation.getById(AtlasEducation.pathways, education.pathwayId);
+    education.combinationId = pathway?.combinations.some(item => item.id === education.combinationId) ? education.combinationId : '';
+    education.facultyId = AtlasEducation.faculties.some(item => item.id === education.facultyId) ? education.facultyId : '';
+    const faculty = AtlasEducation.university.find(item => item.id === education.facultyId);
+    education.programmeId = faculty?.programmes.some(item => item.id === education.programmeId) ? education.programmeId : '';
+    const programme = AtlasEducation.getProgramme(education.programmeId);
+    education.academicYearId = programme?.units.some(item => item.academicYearId === education.academicYearId) ? education.academicYearId : '';
+    education.gradeId = education.levelId === 'university' ? education.academicYearId : education.gradeId;
+    education.semesterId = programme?.units.some(item => item.academicYearId === education.academicYearId && item.semesterId === education.semesterId)
+      ? education.semesterId : '';
+    if (education.levelId !== 'secondary' || education.curriculumId !== 'cbc-kenya') education.pathwayId = '';
+    if (!education.pathwayId) education.combinationId = '';
+    education.subjectId = typeof education.subjectId === 'string' ? education.subjectId.slice(0, 100) : '';
+    education.topicId = typeof education.topicId === 'string' ? education.topicId.slice(0, 120) : '';
+    const universityUnits = AtlasEducation.university.flatMap(item => item.programmes).flatMap(item => item.units);
+    const allSubjects = [...AtlasEducation.subjects, ...universityUnits];
+    education.preferredSubjectIds = Array.isArray(education.preferredSubjectIds)
+      ? [...new Set(education.preferredSubjectIds.filter(id => typeof id === 'string' && allSubjects.some(item => item.id === id)))] : [];
+    education.recentSubjectIds = Array.isArray(education.recentSubjectIds)
+      ? [...new Set(education.recentSubjectIds.filter(id => typeof id === 'string' && (AtlasEducation.subjects.some(item => item.id === id) || AtlasEducation.university.some(f => f.programmes.some(p => p.units.some(u => u.id === id))))))].slice(0, 6) : [];
+    const combination = AtlasEducation.pathways.flatMap(item => item.combinations).find(item => item.id === education.combinationId);
+    const selectedGradeSubjects = education.levelId === 'university'
+      ? AtlasEducation.getUnits(education.programmeId, education.academicYearId, education.semesterId)
+      : AtlasEducation.getSubjectsForGrade(education.gradeId, combination?.subjectIds || []);
+    if (!selectedGradeSubjects.some(item => item.id === education.subjectId)) {
+      education.subjectId = '';
+      education.topicId = '';
+    } else if (!selectedGradeSubjects.find(item => item.id === education.subjectId).topics.some(item => item.id === education.topicId)) {
+      education.topicId = '';
+    }
     restored.profile.signedIn = Boolean(restored.profile.signedIn);
     restored.profile.membership = ['monthly', 'yearly'].includes(restored.profile.membership) ? restored.profile.membership : null;
     restored.profile.membershipStartedAt = typeof restored.profile.membershipStartedAt === 'string' && Number.isFinite(Date.parse(restored.profile.membershipStartedAt))
@@ -174,6 +228,19 @@ function loadState() {
       level: typeof certificate.level === 'string' ? certificate.level.slice(0, 40) : 'Mastery',
       completionDate: certificate.completionDate
     })).slice(0, 100);
+    restored.customQuestions = restored.customQuestions
+      .map(item => AtlasQuestionBank.validateQuestion(item))
+      .filter(result => result.valid && !AtlasQuestionBank.questions.some(item => item.id === result.question.id))
+      .map(result => result.question).slice(0, 500);
+    restored.quizAttempts = restored.quizAttempts.filter(attempt =>
+      attempt && typeof attempt.id === 'string' && typeof attempt.title === 'string' &&
+      Array.isArray(attempt.questions) && Array.isArray(attempt.answers) &&
+      attempt.questions.length > 0 && attempt.questions.length === attempt.answers.length &&
+      Number.isFinite(Date.parse(attempt.completedAt))
+    ).slice(0, 50);
+    restored.topicPerformance = Object.fromEntries(Object.entries(restored.topicPerformance)
+      .filter(([key, entries]) => typeof key === 'string' && Array.isArray(entries))
+      .map(([key, entries]) => [key, entries.filter(entry => entry && ['beginner', 'intermediate', 'advanced'].includes(entry.difficulty) && typeof entry.correct === 'boolean' && Number.isFinite(Date.parse(entry.date))).slice(-20)]));
     return restored;
   } catch (error) {
     console.error('Unable to read saved Atlas Learn demo data.', error);
@@ -184,8 +251,18 @@ function loadState() {
 
 let state = loadState();
 let activePage = 'home';
+let educationStage = null;
+let educationSearchQuery = '';
+let educationTopicSearchQuery = '';
+let educationSettingsDraft = null;
 let activeQuiz = null;
 let quizSession = null;
+let quizBuilderDraft = null;
+let quizBuilderPreviewQuestions = [];
+let quizBuilderSearch = '';
+let bankQuestionEditId = null;
+let bankQuestionDeleteConfirmId = null;
+let bankQuestionManagerOpen = false;
 let timerId = null;
 let selectedCategory = 'all';
 let searchQuery = '';
@@ -451,7 +528,7 @@ function verifyCertificatePage() {
 function renderNav() {
   const nav = document.getElementById('nav-list');
   nav.innerHTML = navItems.map(([id, label, icon], index) =>
-    `${index === 3 ? '<div class="nav-separator"></div>' : ''}<a href="#${id}" class="nav-item ${activePage === id ? 'active' : ''}" data-page="${id}" ${activePage === id ? 'aria-current="page"' : ''}>${icons[icon]}<span>${label}</span></a>`
+    `${index === 5 ? '<div class="nav-separator"></div>' : ''}<a href="#${id}" class="nav-item ${activePage === id ? 'active' : ''}" data-page="${id}" ${activePage === id ? 'aria-current="page"' : ''}>${icons[icon]}<span>${label}</span></a>`
   ).join('');
 }
 function renderUser() {
@@ -552,7 +629,7 @@ function explorePage() {
     const searchMatch = `${quiz.title} ${quiz.description} ${categoryFor(quiz.category)?.name || ''}`.toLowerCase().includes(searchQuery.toLowerCase());
     return categoryMatch && searchMatch;
   });
-  return `${pageHeading('KEEP YOUR CURIOSITY CLOSE', 'Explore quizzes', 'Short, thoughtful sessions to grow your knowledge.', '<button type="button" class="secondary-button" data-page="categories">Browse categories</button>')}
+  return `${pageHeading('KEEP YOUR CURIOSITY CLOSE', 'Explore quizzes', 'Short, thoughtful sessions to grow your knowledge.', '<div class="heading-actions"><button type="button" class="secondary-button" data-page="quiz-builder">Build a custom quiz</button><button type="button" class="secondary-button" data-page="categories">Browse categories</button></div>')}
     <div class="filter-bar"><label class="search-box">${icons.search}<input id="quiz-search" type="search" value="${escapeHTML(searchQuery)}" placeholder="Search quizzes..." aria-label="Search quizzes"></label>
       <button class="filter-chip ${selectedCategory === 'all' ? 'active' : ''}" data-category-filter="all">All topics</button>
       ${categories.map(category => `<button class="filter-chip ${selectedCategory === category.id ? 'active' : ''}" data-category-filter="${category.id}">${category.emoji} ${category.name}</button>`).join('')}
@@ -566,6 +643,672 @@ function categoriesPage() {
       return `<article class="category-card" tabindex="0" role="button" data-open-category="${category.id}" aria-label="Explore ${category.name} quizzes">${quizMark(category.id)}<h3>${category.name}</h3><p>${category.description}</p><div class="category-card-footer"><span>${count} quizzes</span><span>Explore →</span></div></article>`;
     }).join('')}</div>
     <div class="demo-warning" style="margin-top:18px">Quizzes are available in demo mode. A connected learning catalog could add new courses and question sets.</div>`;
+}
+
+function educationPreferences() {
+  return state.profile.education;
+}
+function saveEducationPreferences(changes, message = '') {
+  const education = educationPreferences();
+  const previous = structuredClone(education);
+  Object.assign(education, changes);
+  if (!persist()) {
+    Object.assign(education, previous);
+    return false;
+  }
+  if (message) showToast(message, 'success');
+  return true;
+}
+function educationInitialStage() {
+  const preference = educationPreferences();
+  if (!preference.levelId) return 'levels';
+  if (!preference.curriculumId) return 'curricula';
+  if (preference.levelId === 'university') {
+    if (preference.topicId) return 'topic';
+    if (preference.subjectId) return 'subject';
+    if (preference.semesterId) return 'units';
+    if (preference.academicYearId) return 'semesters';
+    if (preference.programmeId) return 'academic-years';
+    if (preference.facultyId) return 'programmes';
+    return 'faculties';
+  }
+  if (preference.levelId === 'secondary') {
+    const selectedGrade = AtlasEducation.getById(AtlasEducation.grades, preference.gradeId);
+    if (preference.topicId) return 'topic';
+    if (preference.subjectId) return 'subject';
+    if (preference.curriculumId === '844-kenya') return preference.gradeId ? 'subjects' : 'grades';
+    if (preference.combinationId && selectedGrade) return 'subjects';
+    if (preference.combinationId) return 'senior-grades';
+    if (selectedGrade?.stage === 'Junior School') return 'subjects';
+    if (preference.pathwayId) return 'combinations';
+    return 'secondary-structure';
+  }
+  if (preference.topicId) return 'topic';
+  if (preference.subjectId) return 'subject';
+  if (preference.gradeId) return 'subjects';
+  return 'grades';
+}
+function educationLabel(id, items) {
+  return AtlasEducation.getById(items, id)?.name || '';
+}
+function educationCurrentItems() {
+  const preference = educationPreferences();
+  if (preference.levelId === 'university') {
+    return AtlasEducation.getUnits(preference.programmeId, preference.academicYearId, preference.semesterId);
+  }
+  const grade = AtlasEducation.getById(AtlasEducation.grades, preference.gradeId);
+  if (!grade) return [];
+  const combination = AtlasEducation.pathways
+    .flatMap(pathway => pathway.combinations)
+    .find(item => item.id === preference.combinationId);
+  return AtlasEducation.getSubjectsForGrade(grade.id, combination?.subjectIds || grade.subjectIds);
+}
+function educationSelectedItem() {
+  return educationCurrentItems().find(item => item.id === educationPreferences().subjectId) || null;
+}
+function educationBreadcrumbs() {
+  const preference = educationPreferences();
+  const crumbs = [{ label: 'Education levels', stage: 'levels' }];
+  const level = AtlasEducation.getById(AtlasEducation.levels, preference.levelId);
+  if (level) crumbs.push({ label: level.shortName, stage: 'curricula' });
+  if (preference.curriculumId) {
+    const curriculum = AtlasEducation.getById(AtlasEducation.curricula, preference.curriculumId);
+    if (curriculum) crumbs.push({ label: curriculum.name, stage: preference.levelId === 'secondary' ? 'secondary-structure' : preference.levelId === 'university' ? 'faculties' : 'grades' });
+  }
+  if (preference.levelId === 'secondary') {
+    if (preference.pathwayId) {
+      const pathway = AtlasEducation.getById(AtlasEducation.pathways, preference.pathwayId);
+      if (pathway) crumbs.push({ label: pathway.name, stage: 'combinations' });
+    }
+    if (preference.combinationId) {
+      const combination = AtlasEducation.pathways.flatMap(pathway => pathway.combinations).find(item => item.id === preference.combinationId);
+      if (combination) crumbs.push({ label: combination.name, stage: 'senior-grades' });
+    }
+  }
+  if (preference.levelId === 'university') {
+    const faculty = AtlasEducation.faculties.find(item => item.id === preference.facultyId);
+    const programme = AtlasEducation.getProgramme(preference.programmeId);
+    if (faculty) crumbs.push({ label: faculty.name, stage: 'programmes' });
+    if (programme) crumbs.push({ label: programme.name, stage: 'academic-years' });
+    if (preference.academicYearId) crumbs.push({ label: educationLabel(preference.academicYearId, AtlasEducation.grades), stage: 'semesters' });
+    if (preference.semesterId) crumbs.push({ label: `Semester ${preference.semesterId.slice(-1)}`, stage: 'units' });
+  } else if (preference.gradeId) {
+    const grade = AtlasEducation.getById(AtlasEducation.grades, preference.gradeId);
+    if (grade) crumbs.push({ label: grade.name, stage: 'subjects' });
+  }
+  const selected = educationSelectedItem();
+  if (selected) crumbs.push({ label: selected.name, stage: 'subject' });
+  const topic = selected?.topics.find(item => item.id === preference.topicId);
+  if (topic) crumbs.push({ label: topic.name, stage: 'topic' });
+  return crumbs;
+}
+function educationBackButton(stage) {
+  return `<button type="button" class="secondary-button education-back" data-education-back="${stage}">← Back</button>`;
+}
+function educationHeading(eyebrow, title, description, backStage = 'levels') {
+  const crumbs = educationBreadcrumbs();
+  const breadcrumbs = crumbs.map((crumb, index) =>
+    `<button type="button" class="education-crumb ${index === crumbs.length - 1 ? 'current' : ''}" data-education-back="${crumb.stage}" ${index === crumbs.length - 1 ? 'aria-current="step"' : ''}>${escapeHTML(crumb.label)}</button>`
+  ).join('<span aria-hidden="true">/</span>');
+  return `${pageHeading(eyebrow, title, description, educationBackButton(backStage))}
+    <nav class="education-breadcrumbs" aria-label="Education navigation">${breadcrumbs}</nav>`;
+}
+function educationCard(id, name, description, icon, dataAttribute) {
+  return `<button type="button" class="education-card" ${dataAttribute}="${escapeHTML(id)}">
+    <span class="education-card-icon" aria-hidden="true">${icon}</span><span class="education-card-copy"><strong>${escapeHTML(name)}</strong><small>${escapeHTML(description)}</small></span><span class="education-card-arrow" aria-hidden="true">→</span>
+  </button>`;
+}
+function educationContentNotice() {
+  return '<p class="education-sample-note"><strong>Sample learning content</strong> · These examples demonstrate navigation and are not verified official curriculum requirements.</p>';
+}
+function educationSubjectCards(items, unit = false) {
+  const query = educationSearchQuery.trim().toLocaleLowerCase();
+  const recentIds = new Set(educationPreferences().recentSubjectIds);
+  const recent = educationPreferences().recentSubjectIds
+    .map(id => AtlasEducation.subjects.find(item => item.id === id) || AtlasEducation.university.flatMap(faculty => faculty.programmes).flatMap(programme => programme.units).find(item => item.id === id))
+    .filter(item => item && items.some(current => current.id === item.id) && (!query || `${item.name} ${item.description}`.toLocaleLowerCase().includes(query)));
+  const filtered = items.filter(item =>
+    (!recentIds.has(item.id) || query) && `${item.name} ${item.description}`.toLocaleLowerCase().includes(query));
+  return `<label class="education-search">${icons.search}<input id="education-subject-search" type="search" value="${escapeHTML(educationSearchQuery)}" placeholder="Search subjects..." aria-label="Search subjects"></label>
+    ${!query && recent.length ? `<section class="education-recent"><h3>Recently accessed</h3><div class="education-card-grid">${recent.map(item => educationCard(item.id, item.name, item.description, unit ? '📘' : AtlasEducation.subjects.find(subject => subject.id === item.id)?.icon || '📘', 'data-education-subject')).join('')}</div></section>` : ''}
+    ${filtered.length
+      ? `<div class="education-card-grid">${filtered.map(item => educationCard(item.id, item.name, item.description, unit ? '📘' : item.icon, 'data-education-subject')).join('')}</div>`
+      : recent.length && !query ? '' : '<div class="empty-state"><div class="empty-icon">🔎</div><h3>No subjects found</h3><p>Try another subject name.</p></div>'}`;
+}
+function educationSubjectPage(selected) {
+  const preference = educationPreferences();
+  const topics = selected.topics.filter(topic => `${topic.name} ${topic.description}`.toLocaleLowerCase().includes(educationTopicSearchQuery.trim().toLocaleLowerCase()));
+  return `<section class="education-detail-card"><span class="education-card-icon">${AtlasEducation.subjects.find(item => item.id === selected.id)?.icon || '📘'}</span><div><span class="education-detail-kicker">${preference.levelId === 'university' ? 'ACADEMIC UNIT' : 'SUBJECT'}</span><h2>${escapeHTML(selected.name)}</h2><p>${escapeHTML(selected.description)}</p></div></section>
+    <div class="education-topic-heading"><div><h2>Topics</h2><p>${selected.topics.length} sample learning topics</p></div><label class="education-search">${icons.search}<input id="education-topic-search" type="search" value="${escapeHTML(educationTopicSearchQuery)}" placeholder="Search topics..." aria-label="Search topics"></label></div>
+    ${topics.length ? `<div class="education-topic-list">${topics.map(topic => `<button type="button" class="education-topic" data-education-topic="${escapeHTML(topic.id)}"><span class="education-topic-number">✦</span><span><strong>${escapeHTML(topic.name)}</strong><small>${escapeHTML(topic.description)}</small></span><span aria-hidden="true">→</span></button>`).join('')}</div>`
+      : '<div class="empty-state"><div class="empty-icon">🔎</div><h3>No topics found</h3><p>Try another topic name.</p></div>'}
+    ${educationContentNotice()}`;
+}
+function educationTopicPage(selected) {
+  const topic = selected?.topics.find(item => item.id === educationPreferences().topicId);
+  if (!topic) return '<div class="empty-state"><h3>Topic unavailable</h3><p>Choose a topic from the selected subject.</p></div>';
+  return `<article class="education-topic-detail"><span class="education-detail-kicker">SAMPLE TOPIC · ${escapeHTML(selected.name)}</span><h2>${escapeHTML(topic.name)}</h2><p>${escapeHTML(topic.description)}</p><div class="education-learning-prompt"><strong>Try this</strong><span>Write down one question you would like to explore about this topic, then compare your ideas with a classmate or teacher.</span></div><div class="education-detail-actions"><button type="button" class="primary-button" data-practice-topic="${escapeHTML(topic.id)}">Build a quiz on this topic ${icons.arrow}</button>${educationBackButton('subject')}</div></article>${educationContentNotice()}`;
+}
+function educationPage() {
+  const preference = educationPreferences();
+  if (!educationStage) educationStage = educationInitialStage();
+  const level = AtlasEducation.getById(AtlasEducation.levels, preference.levelId);
+  const curriculum = AtlasEducation.getById(AtlasEducation.curricula, preference.curriculumId);
+  const grade = AtlasEducation.getById(AtlasEducation.grades, preference.gradeId);
+  const pathway = AtlasEducation.getById(AtlasEducation.pathways, preference.pathwayId);
+  const programme = AtlasEducation.getProgramme(preference.programmeId);
+  const selected = educationSelectedItem();
+  const header = (eyebrow, title, description, back = 'levels') => educationHeading(eyebrow, title, description, back);
+  if (educationStage === 'levels') {
+    const recent = preference.recentSubjectIds.map(id =>
+      AtlasEducation.subjects.find(item => item.id === id) ||
+      AtlasEducation.university.flatMap(faculty => faculty.programmes).flatMap(item => item.units).find(item => item.id === id)
+    ).filter(Boolean);
+    return `${pageHeading('YOUR LEARNING LIBRARY', 'Choose your education level', 'Start with a learning level, then browse the curriculum, grade, subjects and topics that fit.', '<div class="heading-actions"><button type="button" class="secondary-button" data-page="quiz-builder">Quiz studio</button><button type="button" class="secondary-button" data-page="settings">Learning preferences</button></div>')}
+      <div class="education-level-grid">${AtlasEducation.levels.map(item => educationCard(item.id, item.name, item.description, item.icon, 'data-education-level')).join('')}</div>
+      ${recent.length ? `<section class="education-recent education-home-recent"><h2>Recently accessed subjects</h2><div class="education-card-grid">${recent.map(item => educationCard(item.id, item.name, item.description, '📘', 'data-recent-subject')).join('')}</div></section>` : ''}
+      ${educationContentNotice()}`;
+  }
+  if (educationStage === 'curricula') {
+    const options = AtlasEducation.getCurricula(preference.levelId);
+    return `${header('YOUR LEARNING LIBRARY', 'Choose a curriculum', `Select the curriculum for ${level?.name || 'this education level'}.`, 'levels')}
+      <div class="education-card-grid">${options.map(item => educationCard(item.id, item.name, `Browse sample ${level?.shortName || ''} learning content for ${item.name}.`, '📚', 'data-education-curriculum')).join('')}</div>${educationContentNotice()}`;
+  }
+  if (educationStage === 'secondary-structure') {
+    const juniorGrades = AtlasEducation.getGrades('secondary', 'cbc-kenya').filter(item => item.stage === 'Junior School');
+    const seniorPathways = AtlasEducation.pathways;
+    return `${header('CBC PATHWAY', 'Choose a learning stage', 'Junior School is organised by grade. Senior School sample content is grouped by pathway and subject combination.', 'curricula')}
+      <section class="education-section"><h2>Junior School</h2><div class="education-card-grid">${juniorGrades.map(item => educationCard(item.id, item.name, 'Junior School · sample subjects and topics', '🧭', 'data-education-grade')).join('')}</div></section>
+      <section class="education-section"><h2>Senior School pathways</h2><div class="education-card-grid">${seniorPathways.map(item => educationCard(item.id, item.name, item.description, '🛤️', 'data-education-pathway')).join('')}</div></section>
+      ${educationContentNotice()}`;
+  }
+  if (educationStage === 'combinations') {
+    return `${header('CBC SENIOR SCHOOL', `${pathway?.name || 'Pathway'} subject combinations`, 'Choose a sample combination to see the Grades 10–12 subject collection.', 'secondary-structure')}
+      <div class="education-card-grid">${(pathway?.combinations || []).map(item => educationCard(item.id, item.name, `${item.subjectIds.length} sample subjects · Choose to browse available senior grades.`, '🧩', 'data-education-combination')).join('')}</div>${educationContentNotice()}`;
+  }
+  if (educationStage === 'senior-grades') {
+    return `${header('CBC SENIOR SCHOOL', `${pathway?.name || 'Senior School'} · ${AtlasEducation.pathways.flatMap(item => item.combinations).find(item => item.id === preference.combinationId)?.name || ''}`, 'Choose an academic grade to browse its pathway-specific subjects.', 'combinations')}
+      <div class="education-card-grid">${AtlasEducation.getGrades('secondary', 'cbc-kenya').filter(item => item.stage === 'Senior School').map(item => educationCard(item.id, item.name, 'Senior School · sample pathway and combination subjects', '🎓', 'data-education-grade')).join('')}</div>${educationContentNotice()}`;
+  }
+  if (educationStage === 'grades') {
+    const grades = AtlasEducation.getGrades(preference.levelId, preference.curriculumId);
+    return `${header('CHOOSE YOUR GRADE', `${level?.name || 'Education'} grades`, 'Select a grade to see only the subjects available in this sample catalog.', 'curricula')}
+      <div class="education-card-grid">${grades.map(item => educationCard(item.id, item.name, item.stage, '📘', 'data-education-grade')).join('')}</div>
+      ${educationContentNotice()}`;
+  }
+  if (educationStage === 'faculties') {
+    return `${header('UNIVERSITY STUDIES', 'Choose a faculty or school', 'Explore the sample academic programmes organised by faculty or school.', 'curricula')}
+      <div class="education-card-grid">${AtlasEducation.university.map(item => educationCard(item.id, item.name, `${item.programmes.length} sample programmes`, item.icon, 'data-education-faculty')).join('')}</div>${educationContentNotice()}`;
+  }
+  if (educationStage === 'programmes') {
+    const faculty = AtlasEducation.university.find(item => item.id === preference.facultyId);
+    return `${header('UNIVERSITY STUDIES', faculty?.name || 'Academic programmes', 'Choose a programme to explore its sample units.', 'faculties')}
+      <div class="education-card-grid">${(faculty?.programmes || []).map(item => educationCard(item.id, item.name, item.description, '🎓', 'data-education-programme')).join('')}</div>${educationContentNotice()}`;
+  }
+  if (educationStage === 'academic-years') {
+    const years = [...new Set(programme?.units.map(item => item.academicYearId) || [])]
+      .map(id => AtlasEducation.getById(AtlasEducation.grades, id)).filter(Boolean);
+    return `${header('UNIVERSITY STUDIES', programme?.name || 'Academic years', 'Choose an academic year for this sample programme.', 'programmes')}
+      <div class="education-card-grid">${years.map(item => educationCard(item.id, item.name, 'Browse semesters and units', '📆', 'data-education-year')).join('')}</div>${educationContentNotice()}`;
+  }
+  if (educationStage === 'semesters') {
+    const semesters = [...new Set(programme?.units.filter(item => item.academicYearId === preference.academicYearId).map(item => item.semesterId) || [])];
+    return `${header('UNIVERSITY STUDIES', `${programme?.name || 'Programme'} · ${grade?.name || 'Academic year'}`, 'Choose a semester to browse its sample academic units.', 'academic-years')}
+      <div class="education-card-grid">${semesters.map(id => educationCard(id, `Semester ${id.slice(-1)}`, 'Explore the units in this semester', '🗓️', 'data-education-semester')).join('')}</div>${educationContentNotice()}`;
+  }
+  if (educationStage === 'units') {
+    const items = educationCurrentItems();
+    return `${header('UNIVERSITY STUDIES', `${programme?.name || 'Programme'} · ${grade?.name || ''} · Semester ${preference.semesterId.slice(-1)}`, 'Choose a unit to view its topics.', 'semesters')}
+      ${educationSubjectCards(items, true)}${educationContentNotice()}`;
+  }
+  if (educationStage === 'subjects') {
+    const subjectItems = educationCurrentItems();
+    const eyebrow = preference.levelId === 'secondary' ? `${curriculum?.name || 'SECONDARY'} · ${grade?.stage || ''}` : `${level?.shortName || 'LEARNING'} · ${grade?.name || ''}`;
+    return `${header(eyebrow, `${grade?.name || 'Grade'} subjects`, 'Choose a subject to explore its sample topics.', preference.levelId === 'secondary' ? preference.curriculumId === 'cbc-kenya' ? (grade?.stage === 'Senior School' ? 'senior-grades' : 'secondary-structure') : 'secondary-structure' : 'grades')}
+      ${educationSubjectCards(subjectItems)}${educationContentNotice()}`;
+  }
+  if (educationStage === 'subject') {
+    return `${header(preference.levelId === 'university' ? 'ACADEMIC UNIT' : 'SUBJECT', selected?.name || 'Subject', 'Browse sample topics or search within this subject.', preference.levelId === 'university' ? 'units' : 'subjects')}
+      ${selected ? educationSubjectPage(selected) : '<div class="empty-state"><h3>Subject unavailable</h3><p>Choose an available subject to continue.</p></div>'}`;
+  }
+  if (educationStage === 'topic') {
+    return `${header('TOPIC', selected?.topics.find(item => item.id === preference.topicId)?.name || 'Learning topic', 'Explore this sample topic within the selected subject.', 'subject')}
+      ${educationTopicPage(selected)}`;
+  }
+  educationStage = educationInitialStage();
+  return educationPage();
+}
+function selectEducationLevel(id) {
+  const level = AtlasEducation.getById(AtlasEducation.levels, id);
+  if (!level) return;
+  educationSearchQuery = '';
+  educationTopicSearchQuery = '';
+  saveEducationPreferences({
+    levelId: id, curriculumId: '', gradeId: '', preferredSubjectIds: [],
+    pathwayId: '', combinationId: '', facultyId: '', programmeId: '',
+    academicYearId: '', semesterId: '', subjectId: '', topicId: ''
+  });
+  educationStage = 'curricula';
+  render();
+}
+function selectEducationCurriculum(id) {
+  if (!AtlasEducation.getCurricula(educationPreferences().levelId).some(item => item.id === id)) return;
+  saveEducationPreferences({
+    curriculumId: id, gradeId: '', pathwayId: '', combinationId: '', facultyId: '',
+    programmeId: '', academicYearId: '', semesterId: '', subjectId: '', topicId: '', preferredSubjectIds: []
+  });
+  const levelId = educationPreferences().levelId;
+  educationStage = levelId === 'secondary' ? (id === 'cbc-kenya' ? 'secondary-structure' : 'grades') : levelId === 'university' ? 'faculties' : 'grades';
+  render();
+}
+function selectEducationGrade(id) {
+  const preference = educationPreferences();
+  if (!AtlasEducation.getGrades(preference.levelId, preference.curriculumId).some(item => item.id === id)) return;
+  const yearId = preference.levelId === 'university' ? id : '';
+  const combination = AtlasEducation.pathways.flatMap(pathway => pathway.combinations).find(item => item.id === preference.combinationId);
+  const availableSubjects = preference.levelId === 'university'
+    ? AtlasEducation.getUnits(preference.programmeId, yearId, '').map(item => item.id)
+    : AtlasEducation.getSubjectsForGrade(id, combination?.subjectIds || []).map(item => item.id);
+  saveEducationPreferences({
+    gradeId: id, academicYearId: yearId, semesterId: '', subjectId: '', topicId: '',
+    preferredSubjectIds: preference.preferredSubjectIds.filter(subjectId => availableSubjects.includes(subjectId))
+  });
+  educationSearchQuery = '';
+  educationStage = preference.levelId === 'university' ? 'semesters' : 'subjects';
+  render();
+}
+function openEducationSubject(id) {
+  const item = educationCurrentItems().find(subject => subject.id === id);
+  if (!item) return;
+  const recentSubjectIds = [id, ...educationPreferences().recentSubjectIds.filter(recentId => recentId !== id)].slice(0, 6);
+  if (!saveEducationPreferences({ subjectId: id, topicId: '', recentSubjectIds })) return;
+  educationTopicSearchQuery = '';
+  educationStage = 'subject';
+  render();
+}
+function openRecentEducationSubject(id) {
+  const universityProgramme = AtlasEducation.university.flatMap(faculty => faculty.programmes)
+    .find(item => item.units.some(unit => unit.id === id));
+  if (universityProgramme) {
+    const unit = universityProgramme.units.find(item => item.id === id);
+    const faculty = AtlasEducation.university.find(item => item.programmes.some(programme => programme.id === universityProgramme.id));
+    saveEducationPreferences({
+      levelId: 'university', curriculumId: 'university-studies', facultyId: faculty.id, programmeId: universityProgramme.id,
+      academicYearId: unit.academicYearId, gradeId: unit.academicYearId, semesterId: unit.semesterId, subjectId: id, topicId: ''
+    });
+  } else {
+    const item = AtlasEducation.subjects.find(subject => subject.id === id);
+    if (!item) return;
+    const gradeId = item.gradeIds[0];
+    const grade = AtlasEducation.getById(AtlasEducation.grades, gradeId);
+    const pathway = AtlasEducation.pathways.find(path => path.combinations.some(combination => combination.subjectIds.includes(id)));
+    const combination = pathway?.combinations.find(candidate => candidate.subjectIds.includes(id));
+    saveEducationPreferences({
+      levelId: grade.levelId, curriculumId: grade.curriculumId, gradeId,
+      pathwayId: pathway?.id || '', combinationId: combination?.id || '', subjectId: id, topicId: ''
+    });
+  }
+  educationStage = 'subject';
+  render();
+}
+function backEducation(stage) {
+  if (stage === 'levels') {
+    educationStage = 'levels';
+    render();
+    return;
+  }
+  const preference = educationPreferences();
+  const reset = {
+    topic: { topicId: '' },
+    subject: { topicId: '' },
+    subjects: { subjectId: '', topicId: '' },
+    units: { subjectId: '', topicId: '' },
+    semesters: { semesterId: '', subjectId: '', topicId: '' },
+    'academic-years': { academicYearId: '', gradeId: '', semesterId: '', subjectId: '', topicId: '' },
+    programmes: { programmeId: '', academicYearId: '', gradeId: '', semesterId: '', subjectId: '', topicId: '' },
+    faculties: { facultyId: '', programmeId: '', academicYearId: '', gradeId: '', semesterId: '', subjectId: '', topicId: '' },
+    combinations: { combinationId: '', gradeId: '', subjectId: '', topicId: '' },
+    'senior-grades': { gradeId: '', subjectId: '', topicId: '' },
+    'secondary-structure': { pathwayId: '', combinationId: '', gradeId: '', subjectId: '', topicId: '' },
+    grades: { gradeId: '', subjectId: '', topicId: '' },
+    curricula: { curriculumId: '', pathwayId: '', combinationId: '', gradeId: '', facultyId: '', programmeId: '', academicYearId: '', semesterId: '', subjectId: '', topicId: '' }
+  }[stage];
+  if (!reset) return;
+  saveEducationPreferences(reset);
+  educationStage = stage;
+  render();
+}
+function selectEducationPathway(id) {
+  if (!AtlasEducation.pathways.some(item => item.id === id)) return;
+  saveEducationPreferences({ pathwayId: id, combinationId: '', gradeId: '', subjectId: '', topicId: '', preferredSubjectIds: [] });
+  educationStage = 'combinations';
+  render();
+}
+function selectEducationCombination(id) {
+  const pathway = AtlasEducation.getById(AtlasEducation.pathways, educationPreferences().pathwayId);
+  if (!pathway?.combinations.some(item => item.id === id)) return;
+  saveEducationPreferences({
+    combinationId: id, gradeId: '', subjectId: '', topicId: '',
+    preferredSubjectIds: educationPreferences().preferredSubjectIds.filter(subjectId => pathway.combinations.find(item => item.id === id).subjectIds.includes(subjectId))
+  });
+  educationStage = 'senior-grades';
+  render();
+}
+function selectEducationFaculty(id) {
+  if (!AtlasEducation.university.some(item => item.id === id)) return;
+  saveEducationPreferences({ facultyId: id, programmeId: '', academicYearId: '', gradeId: '', semesterId: '', subjectId: '', topicId: '', preferredSubjectIds: [] });
+  educationStage = 'programmes';
+  render();
+}
+function selectEducationProgramme(id) {
+  const faculty = AtlasEducation.university.find(item => item.id === educationPreferences().facultyId);
+  if (!faculty?.programmes.some(item => item.id === id)) return;
+  saveEducationPreferences({ programmeId: id, academicYearId: '', gradeId: '', semesterId: '', subjectId: '', topicId: '', preferredSubjectIds: [] });
+  educationStage = 'academic-years';
+  render();
+}
+function selectEducationSemester(id) {
+  const preference = educationPreferences();
+  const units = AtlasEducation.getUnits(preference.programmeId, preference.academicYearId, id);
+  if (!units.length) return;
+  saveEducationPreferences({
+    semesterId: id, subjectId: '', topicId: '',
+    preferredSubjectIds: preference.preferredSubjectIds.filter(subjectId => units.some(item => item.id === subjectId))
+  });
+  educationSearchQuery = '';
+  educationStage = 'units';
+  render();
+}
+function openEducationTopic(id) {
+  const selected = educationSelectedItem();
+  if (!selected?.topics.some(item => item.id === id)) return;
+  saveEducationPreferences({ topicId: id });
+  educationStage = 'topic';
+  render();
+}
+function educationPreferenceSelect(name, label, options, current, required = false) {
+  return `<div class="field"><label for="education-${name}">${label}</label><select id="education-${name}" name="${name}" ${required ? 'required' : ''}>${options.map(option => `<option value="${escapeHTML(option.id)}" ${option.id === current ? 'selected' : ''}>${escapeHTML(option.name)}</option>`).join('')}</select></div>`;
+}
+function educationPreferenceForm() {
+  const preference = educationSettingsDraft || state.profile.education;
+  const level = AtlasEducation.getById(AtlasEducation.levels, preference.levelId);
+  const curricula = preference.levelId ? AtlasEducation.getCurricula(preference.levelId) : AtlasEducation.curricula;
+  let grades = preference.levelId && preference.curriculumId ? AtlasEducation.getGrades(preference.levelId, preference.curriculumId) : [];
+  const pathways = preference.levelId === 'secondary' && preference.curriculumId === 'cbc-kenya' ? AtlasEducation.pathways : [];
+  const selectedPathway = AtlasEducation.getById(pathways, preference.pathwayId);
+  if (selectedPathway && preference.combinationId) grades = grades.filter(item => item.stage === 'Senior School');
+  const faculty = AtlasEducation.university.find(item => item.id === preference.facultyId);
+  const programmes = preference.levelId === 'university' ? (faculty?.programmes || []) : [];
+  const programme = AtlasEducation.getProgramme(preference.programmeId);
+  const years = preference.levelId === 'university' && programme
+    ? [...new Set(programme.units.map(item => item.academicYearId))].map(id => AtlasEducation.getById(AtlasEducation.grades, id)).filter(Boolean) : grades;
+  const combination = selectedPathway?.combinations.find(item => item.id === preference.combinationId);
+  const universityUnits = programme?.units || faculty?.programmes.flatMap(item => item.units) || [];
+  const subjectOptions = preference.levelId === 'university'
+    ? universityUnits.filter(item => (!preference.academicYearId || item.academicYearId === preference.academicYearId) && (!preference.semesterId || item.semesterId === preference.semesterId))
+    : preference.levelId && preference.curriculumId
+      ? (preference.levelId === 'secondary' && combination
+        ? AtlasEducation.subjects.filter(item => combination.subjectIds.includes(item.id) && (!preference.gradeId || item.gradeIds.includes(preference.gradeId)))
+        : grades.filter(item => !preference.gradeId || item.id === preference.gradeId)
+          .flatMap(item => AtlasEducation.getSubjectsForGrade(item.id)))
+      : [];
+  const uniqueSubjects = [...new Map(subjectOptions.map(item => [item.id, item])).values()];
+  const selectedSubjects = new Set(preference.preferredSubjectIds || []);
+  const selectedCountry = preference.countryId === 'KE' ? 'KE' : 'OTHER';
+  const countryOptions = [{ id: 'KE', name: 'Kenya' }, { id: 'OTHER', name: 'Other country' }];
+  return `<form class="settings-card education-preferences-form" id="education-preferences-form">
+    <div class="settings-card-head"><span class="settings-card-icon">🎓</span><div><h3>Education preferences</h3><p>Choose a country, curriculum, level, grade and preferred subjects. Changing these choices never removes quiz results, achievements or certificates.</p></div></div>
+    <div class="education-preference-grid">
+      ${educationPreferenceSelect('country', 'Country', countryOptions, selectedCountry, true)}
+      ${selectedCountry === 'OTHER' ? `<div class="field"><label for="education-country-name">Country name</label><input id="education-country-name" name="countryName" value="${escapeHTML(preference.countryName === 'Kenya' ? '' : preference.countryName)}" maxlength="80" placeholder="Enter country name" required></div>` : ''}
+      ${selectedCountry === 'OTHER' ? '<p class="education-country-note">The current sample catalog covers Kenya. Your country choice is saved for future curriculum catalogs.</p>' : ''}
+      ${educationPreferenceSelect('level', 'Education level', [{ id: '', name: 'Select a level' }, ...AtlasEducation.levels.map(item => ({ id: item.id, name: item.name }))], preference.levelId, true)}
+      ${educationPreferenceSelect('curriculum', 'Curriculum', [{ id: '', name: 'Select a curriculum' }, ...curricula], preference.curriculumId, true)}
+      ${level?.id === 'university' ? educationPreferenceSelect('faculty', 'Faculty or school', [{ id: '', name: 'Select a faculty' }, ...AtlasEducation.faculties], preference.facultyId) : ''}
+      ${level?.id === 'university' && preference.facultyId ? educationPreferenceSelect('programme', 'Academic programme', [{ id: '', name: 'Select a programme' }, ...programmes], preference.programmeId) : ''}
+      ${level?.id === 'university' && programme ? educationPreferenceSelect('grade', 'Academic year', [{ id: '', name: 'Select an academic year' }, ...years], preference.gradeId) : ''}
+      ${level && level.id !== 'university' && preference.curriculumId ? educationPreferenceSelect('grade', 'Grade or year', [{ id: '', name: 'Select a grade or year' }, ...grades], preference.gradeId) : ''}
+      ${pathways.length ? educationPreferenceSelect('pathway', 'Senior School pathway', [{ id: '', name: 'Select a pathway' }, ...pathways], preference.pathwayId) : ''}
+      ${selectedPathway ? educationPreferenceSelect('combination', 'Subject combination', [{ id: '', name: 'Select a combination' }, ...selectedPathway.combinations], preference.combinationId) : ''}
+      ${preference.levelId === 'university' && programme && preference.academicYearId ? educationPreferenceSelect('semester', 'Semester', [{ id: '', name: 'Select a semester' }, ...[...new Set(programme.units.filter(item => item.academicYearId === preference.academicYearId).map(item => item.semesterId))].map(id => ({ id, name: `Semester ${id.slice(-1)}` }))], preference.semesterId) : ''}
+      <fieldset class="education-subject-preferences"><legend>Preferred subjects</legend><p>Select one or more from the sample catalog.</p>
+        <div class="education-preferred-subjects">${uniqueSubjects.length ? uniqueSubjects.map(item => `<label><input type="checkbox" name="preferredSubjectIds" value="${escapeHTML(item.id)}" ${selectedSubjects.has(item.id) ? 'checked' : ''}><span>${escapeHTML(item.name)}</span></label>`).join('') : '<span>Choose an education level, curriculum and grade or academic programme first.</span>'}</div>
+      </fieldset>
+    </div>
+    <div class="form-actions"><button type="submit" class="primary-button">Save education preferences</button><span class="form-footnote">Saved locally with your learning profile.</span></div>
+    ${educationContentNotice()}</form>`;
+}
+
+function getBuilderSubjects(levelId, curriculumId, gradeId) {
+  if (!gradeId) return [];
+  if (levelId === 'university') {
+    return AtlasEducation.university.flatMap(faculty => faculty.programmes)
+      .flatMap(programme => programme.units.filter(unit => unit.academicYearId === gradeId));
+  }
+  const grade = AtlasEducation.getById(AtlasEducation.grades, gradeId);
+  if (!grade || grade.levelId !== levelId || grade.curriculumId !== curriculumId) return [];
+  const selectedCombination = AtlasEducation.pathways.flatMap(pathway => pathway.combinations)
+    .find(item => item.id === quizBuilderDraft?.combinationId);
+  return AtlasEducation.getSubjectsForGrade(gradeId, selectedCombination?.subjectIds || grade.subjectIds);
+}
+function getBuilderTopics(subjectId, levelId, curriculumId, gradeId) {
+  return getBuilderSubjects(levelId, curriculumId, gradeId).find(item => item.id === subjectId)?.topics || [];
+}
+function defaultBuilderSubject(subjects, gradeId) {
+  const questionPool = [...AtlasQuestionBank.questions, ...state.customQuestions];
+  const availableSubject = questionPool.find(question => question.gradeId === gradeId && question.countryId === 'KE' &&
+    subjects.some(subject => subject.id === question.subjectId));
+  return subjects.find(subject => subject.id === availableSubject?.subjectId) || subjects[0];
+}
+function initializeQuizBuilder() {
+  if (quizBuilderDraft) return;
+  const preference = educationPreferences();
+  const sample = AtlasQuestionBank.questions[0];
+  const levelId = AtlasEducation.getById(AtlasEducation.levels, preference.levelId)?.id || sample.educationLevelId;
+  const curriculumId = AtlasEducation.getCurricula(levelId).some(item => item.id === preference.curriculumId)
+    ? preference.curriculumId : sample.curriculumId;
+  const grades = AtlasEducation.getGrades(levelId, curriculumId);
+  const gradeId = grades.some(item => item.id === preference.gradeId) ? preference.gradeId : (grades[0]?.id || '');
+  const subjects = getBuilderSubjects(levelId, curriculumId, gradeId);
+  const defaultSubject = defaultBuilderSubject(subjects, gradeId);
+  quizBuilderDraft = {
+    countryId: preference.countryId === 'KE' ? 'KE' : 'OTHER',
+    levelId, curriculumId, gradeId,
+    subjectId: subjects.some(item => item.id === preference.subjectId) ? preference.subjectId : (defaultSubject?.id || ''),
+    topicId: '',
+    difficulty: 'beginner', questionType: 'all', questionCount: 5, timeLimit: 0,
+    mode: 'practice', immediateFeedback: true, combinationId: preference.combinationId || '', preview: false
+  };
+}
+function builderQuestionPool() {
+  initializeQuizBuilder();
+  const draft = quizBuilderDraft;
+  return [...AtlasQuestionBank.questions, ...state.customQuestions].filter(item => AtlasQuestionBank.matches(item, {
+    countryId: draft.countryId === 'KE' ? 'KE' : 'NO-SAMPLE-CATALOG',
+    curriculumId: draft.curriculumId,
+    educationLevelId: draft.levelId,
+    gradeId: draft.gradeId,
+    subjectId: draft.subjectId,
+    topicId: draft.topicId,
+    difficulty: draft.difficulty === 'adaptive' ? undefined : draft.difficulty,
+    type: draft.questionType === 'all' ? undefined : draft.questionType
+  }));
+}
+function adaptiveDifficulty(pool, draft) {
+  if (draft.difficulty !== 'adaptive') return draft.difficulty;
+  const context = `${draft.countryId}|${draft.curriculumId}|${draft.levelId}|${draft.gradeId}|${draft.subjectId}`;
+  const key = `${context}|${draft.topicId || '*'}`;
+  const recent = (state.topicPerformance[key] || []).filter(entry => entry.answered !== false).slice(-5);
+  const score = recent.length ? recent.filter(entry => entry.correct).length / recent.length : null;
+  const baseRank = score === null ? 0 : score >= .8 ? 1 : score <= .4 ? 0 : 1;
+  const rank = score !== null && score >= .8 ? Math.min(2, baseRank + 1) : score !== null && score <= .4 ? Math.max(0, baseRank - 1) : baseRank;
+  const desired = ['beginner', 'intermediate', 'advanced'][rank];
+  const available = [...new Set(pool.map(question => question.difficulty))];
+  return available.sort((left, right) =>
+    Math.abs(AtlasQuestionBank.difficultyRank[left] - rank) - Math.abs(AtlasQuestionBank.difficultyRank[right] - rank) ||
+    AtlasQuestionBank.difficultyRank[left] - AtlasQuestionBank.difficultyRank[right]
+  )[0] || desired;
+}
+function builderSearchResults(query) {
+  const term = query.trim().toLocaleLowerCase();
+  if (!term) return [];
+  const catalogItems = [...AtlasEducation.subjects, ...AtlasEducation.university.flatMap(faculty => faculty.programmes).flatMap(programme => programme.units)];
+  const results = new Map();
+  for (const subject of catalogItems) {
+    const subjects = subject.gradeIds
+      ? subject.gradeIds.map(gradeId => AtlasEducation.getById(AtlasEducation.grades, gradeId)).filter(Boolean)
+      : AtlasEducation.grades.filter(grade => subject.academicYearId === grade.id);
+    for (const grade of subjects) {
+      const curriculumId = grade.curriculumId;
+      const searchText = `${subject.name} ${subject.description} ${subject.topics.map(topic => `${topic.name} ${topic.description}`).join(' ')}`.toLocaleLowerCase();
+      if (!searchText.includes(term)) continue;
+      for (const topic of subject.topics) {
+        const topicText = `${topic.name} ${topic.description} ${subject.name}`.toLocaleLowerCase();
+        if (!topicText.includes(term) && !subject.name.toLocaleLowerCase().includes(term)) continue;
+        const contextQuestions = [...AtlasQuestionBank.questions, ...state.customQuestions].filter(question =>
+          question.gradeId === grade.id && question.subjectId === subject.id && question.topicId === topic.id);
+        const resultId = `${grade.id}|${subject.id}|${topic.id}`;
+        results.set(resultId, { grade, curriculumId, subject, topic, questions: contextQuestions });
+      }
+    }
+  }
+  for (const question of [...AtlasQuestionBank.questions, ...state.customQuestions]) {
+    const subject = catalogItems.find(item => item.id === question.subjectId);
+    const grade = AtlasEducation.getById(AtlasEducation.grades, question.gradeId);
+    if (!subject || !grade || !`${question.prompt} ${question.instructions} ${question.keywords.join(' ')}`.toLocaleLowerCase().includes(term)) continue;
+    const topic = subject.topics.find(item => item.id === question.topicId);
+    if (!topic) continue;
+    results.set(`${grade.id}|${subject.id}|${topic.id}`, { grade, curriculumId: question.curriculumId, subject, topic, questions: [...AtlasQuestionBank.questions, ...state.customQuestions].filter(item => item.gradeId === grade.id && item.subjectId === subject.id && item.topicId === topic.id) });
+  }
+  return [...results.values()].slice(0, 24);
+}
+function quizBuilderPage() {
+  initializeQuizBuilder();
+  const draft = quizBuilderDraft;
+  const curricula = AtlasEducation.getCurricula(draft.levelId);
+  const grades = AtlasEducation.getGrades(draft.levelId, draft.curriculumId);
+  const subjects = getBuilderSubjects(draft.levelId, draft.curriculumId, draft.gradeId);
+  const topics = getBuilderTopics(draft.subjectId, draft.levelId, draft.curriculumId, draft.gradeId);
+  const pool = builderQuestionPool();
+  const matchingCount = pool.length;
+  const count = Math.min(Number(draft.questionCount) || 1, 20);
+  const selectedDifficulty = adaptiveDifficulty(pool, draft);
+  const eligiblePool = pool.filter(item => item.difficulty === selectedDifficulty);
+  const requestedQuestions = draft.preview && quizBuilderPreviewQuestions.length
+    ? quizBuilderPreviewQuestions : eligiblePool.slice(0, count);
+  const queryResults = builderSearchResults(quizBuilderSearch);
+  const selectedSubject = subjects.find(item => item.id === draft.subjectId);
+  const builderSelect = (key, label, options, value, disabled = false) => `<label class="field"><span>${label}</span><select data-builder-select="${key}" ${disabled ? 'disabled' : ''}>${options.map(option => `<option value="${escapeHTML(option.id)}" ${option.id === value ? 'selected' : ''}>${escapeHTML(option.name)}</option>`).join('')}</select></label>`;
+  const availableLevelQuestions = !matchingCount
+    ? 'No questions match this exact selection yet.'
+    : `${matchingCount} matching sample question${matchingCount === 1 ? '' : 's'} available${eligiblePool.length !== matchingCount ? ` · ${eligiblePool.length} at ${selectedDifficulty} difficulty` : ''}`;
+  return `${pageHeading('BUILD A FOCUSED SESSION', 'Quiz studio', 'Choose the exact learning context, preview matching sample questions, then practice or take an assessment.', '<button type="button" class="secondary-button" data-page="learn">Browse learning library</button>')}
+    <div class="quiz-studio-layout">
+      <section class="form-card quiz-builder-card"><h2>Quiz settings</h2><p>Only questions tagged for your selected country, curriculum, level, grade, subject and topic can be included.</p>
+        <div class="quiz-builder-grid">
+          ${builderSelect('countryId', 'Country', [{ id: 'KE', name: 'Kenya (sample content)' }, { id: 'OTHER', name: 'Other country (no sample bank yet)' }], draft.countryId)}
+          ${builderSelect('levelId', 'Education level', AtlasEducation.levels.map(item => ({ id: item.id, name: item.name })), draft.levelId)}
+          ${builderSelect('curriculumId', 'Curriculum', curricula, draft.curriculumId, !curricula.length)}
+          ${builderSelect('gradeId', draft.levelId === 'university' ? 'Academic year' : 'Grade', grades, draft.gradeId, !grades.length)}
+          ${builderSelect('subjectId', draft.levelId === 'university' ? 'Unit' : 'Subject', subjects, draft.subjectId, !subjects.length)}
+          ${builderSelect('topicId', 'Topic', [{ id: '', name: 'All topics' }, ...topics], draft.topicId, !topics.length)}
+          ${builderSelect('difficulty', 'Difficulty', [{ id: 'beginner', name: 'Beginner' }, { id: 'intermediate', name: 'Intermediate' }, { id: 'advanced', name: 'Advanced' }, { id: 'adaptive', name: 'Adaptive practice' }], draft.difficulty)}
+          ${builderSelect('questionType', 'Question format', [{ id: 'all', name: 'All available formats' }, ...AtlasQuestionBank.questionTypes.map(id => ({ id, name: ({ 'multiple-choice': 'Multiple choice', 'true-false': 'True or False', 'multiple-answer': 'Multiple answer', 'short-answer': 'Short answer', numerical: 'Numerical' })[id] }))], draft.questionType)}
+          <label class="field"><span>Number of questions</span><input type="number" min="1" max="20" value="${count}" data-builder-number="questionCount"></label>
+          <label class="field"><span>Time limit</span><select data-builder-select="timeLimit"><option value="0" ${draft.timeLimit === 0 ? 'selected' : ''}>No timer</option>${[5, 10, 15, 20, 30].map(minutes => `<option value="${minutes}" ${Number(draft.timeLimit) === minutes ? 'selected' : ''}>${minutes} minutes</option>`).join('')}</select></label>
+          ${builderSelect('mode', 'Session mode', [{ id: 'practice', name: 'Practice' }, { id: 'assessment', name: 'Assessment' }], draft.mode)}
+        </div>
+        ${draft.mode === 'practice' ? `<label class="quiz-feedback-toggle"><input type="checkbox" data-builder-feedback ${draft.immediateFeedback ? 'checked' : ''}> Show feedback after each practice answer</label>` : '<p class="form-footnote">Assessment feedback and explanations appear after you submit.</p>'}
+        <div class="quiz-bank-availability ${eligiblePool.length ? '' : 'is-empty'}" role="status">${escapeHTML(availableLevelQuestions)}${draft.difficulty === 'adaptive' ? ` · Adaptive difficulty: ${escapeHTML(selectedDifficulty)}` : ''}</div>
+        <div class="form-actions"><button type="button" class="secondary-button" data-preview-generated>Preview quiz</button><button type="button" class="primary-button" data-start-generated ${eligiblePool.length && draft.preview ? '' : 'disabled'}>Start ${draft.mode === 'assessment' ? 'assessment' : 'practice'} ${icons.arrow}</button></div>
+        ${draft.preview ? `<section class="quiz-preview" aria-live="polite"><h3>Quiz preview</h3><p>${requestedQuestions.length} question${requestedQuestions.length === 1 ? '' : 's'} · ${escapeHTML(draft.mode)} · ${draft.timeLimit ? `${draft.timeLimit} minute timer` : 'untimed'} · ${draft.difficulty === 'adaptive' ? `adaptive (${escapeHTML(selectedDifficulty)})` : escapeHTML(draft.difficulty)}</p>${requestedQuestions.length ? `<ol>${requestedQuestions.map(item => `<li>${escapeHTML(item.prompt)} <small>${escapeHTML(item.type.replaceAll('-', ' '))} · ${escapeHTML(item.difficulty)}</small></li>`).join('')}</ol>` : '<p>No matching questions are available to preview. Try another subject, topic or difficulty.</p>'}</section>` : ''}
+      </section>
+      <aside class="quiz-search-panel"><h2>Discover learning content</h2><p>Search subjects, topics, concepts and available practice questions.</p><label class="search-box">${icons.search}<input type="search" id="builder-search" value="${escapeHTML(quizBuilderSearch)}" placeholder="e.g. fractions, cells, variables" aria-label="Search subjects, topics, concepts and questions"></label>
+        ${quizBuilderSearch.trim() ? queryResults.length ? `<div class="quiz-search-results">${queryResults.map(result => `<article class="quiz-search-result"><span class="eyebrow">${escapeHTML(result.grade.name)} · ${escapeHTML(result.subject.name)}</span><strong>${escapeHTML(result.topic.name)}</strong><p>${escapeHTML(result.topic.description)}</p><small>${result.questions.length} matching sample question${result.questions.length === 1 ? '' : 's'}</small><button type="button" class="text-button" data-search-result="${escapeHTML(result.grade.id)}|${escapeHTML(result.subject.id)}|${escapeHTML(result.topic.id)}">Use this topic ${icons.arrow}</button></article>`).join('')}</div>` : '<div class="empty-state"><p>No matching sample subjects or topics. Try another search.</p></div>' : '<div class="quiz-search-hint">Results are drawn from the sample learning catalog and question bank.</div>'}
+      </aside>
+    </div>
+    <details class="question-manager" ${bankQuestionManagerOpen || bankQuestionEditId ? 'open' : ''}><summary>Manage question bank</summary><p>Add or edit local sample questions, or remove your custom entries. Built-in questions cannot be overwritten. Use a pipe (|) to enter multiple accepted short answers.</p>
+      ${questionBankManagerForm()}
+      <div class="question-manager-list">${state.customQuestions.length ? state.customQuestions.map(item => `<article class="question-manager-row"><div><strong>${escapeHTML(item.prompt)}</strong><span>${escapeHTML(item.gradeId)} · ${escapeHTML(item.subjectId)} · ${escapeHTML(item.topicId)} · ${escapeHTML(item.difficulty)} · ${escapeHTML(item.type)}</span></div><div><button type="button" class="text-button" data-edit-bank-question="${escapeHTML(item.id)}">Edit</button><button type="button" class="text-button danger-text" data-delete-bank-question="${escapeHTML(item.id)}">Remove</button></div></article>`).join('') : '<p>No custom questions have been added.</p>'}</div>
+    </details>
+    ${educationContentNotice()}`;
+}
+function questionBankManagerForm() {
+  const editing = state.customQuestions.find(item => item.id === bankQuestionEditId);
+  const source = editing || {};
+  const levelId = source.educationLevelId || 'primary';
+  const curriculumId = source.curriculumId || AtlasEducation.getCurricula(levelId)[0]?.id || '';
+  const gradeOptions = AtlasEducation.getGrades(levelId, curriculumId);
+  const gradeId = source.gradeId || gradeOptions[0]?.id || '';
+  const subjectOptions = levelId === 'university'
+    ? AtlasEducation.university.flatMap(faculty => faculty.programmes).flatMap(programme => programme.units).filter(item => item.academicYearId === gradeId)
+    : AtlasEducation.getSubjectsForGrade(gradeId, AtlasEducation.getById(AtlasEducation.grades, gradeId)?.subjectIds || []);
+  const subjectId = source.subjectId || subjectOptions[0]?.id || '';
+  const topicOptions = subjectOptions.find(item => item.id === subjectId)?.topics || [];
+  const field = (name, label, options, value) => `<label class="field"><span>${label}</span><select name="${name}" required>${options.map(item => `<option value="${escapeHTML(item.id)}" ${item.id === value ? 'selected' : ''}>${escapeHTML(item.name)}</option>`).join('')}</select></label>`;
+  const answerValue = Array.isArray(source.correctAnswer) ? source.correctAnswer.join(' | ') : source.correctAnswer ?? '';
+  return `<form id="bank-question-form" class="question-manager-form">
+    <input type="hidden" name="id" value="${escapeHTML(source.id || '')}">
+    <label class="field"><span>Country code</span><input name="countryId" value="${escapeHTML(source.countryId || 'KE')}" maxlength="8" required></label>
+    ${field('educationLevelId', 'Education level', AtlasEducation.levels, levelId)}
+    ${field('curriculumId', 'Curriculum', AtlasEducation.getCurricula(levelId), curriculumId)}
+    ${field('gradeId', levelId === 'university' ? 'Academic year' : 'Grade', gradeOptions, gradeId)}
+    ${field('subjectId', levelId === 'university' ? 'Unit' : 'Subject', subjectOptions, subjectId)}
+    ${field('topicId', 'Topic', topicOptions, source.topicId || topicOptions[0]?.id || '')}
+    ${field('difficulty', 'Difficulty', [{ id: 'beginner', name: 'Beginner' }, { id: 'intermediate', name: 'Intermediate' }, { id: 'advanced', name: 'Advanced' }], source.difficulty || 'beginner')}
+    ${field('type', 'Question format', AtlasQuestionBank.questionTypes.map(id => ({ id, name: id.replaceAll('-', ' ') })), source.type || 'multiple-choice')}
+    <label class="field manager-wide"><span>Question</span><textarea name="prompt" maxlength="1000" required>${escapeHTML(source.prompt || '')}</textarea></label>
+    <label class="field manager-wide"><span>Instructions</span><input name="instructions" maxlength="300" required value="${escapeHTML(source.instructions || 'Choose the best answer.')}"></label>
+    <label class="field manager-wide"><span>Answer options (one per line; leave empty for typed answers)</span><textarea name="options" rows="4">${escapeHTML((source.options || []).join('\n'))}</textarea></label>
+    <label class="field manager-wide"><span>Correct answer(s) (use | between multiple accepted answers)</span><input name="correctAnswer" required value="${escapeHTML(answerValue)}"></label>
+    <label class="field"><span>Numerical tolerance (optional)</span><input name="tolerance" type="number" min="0" step="any" value="${escapeHTML(source.tolerance ?? 0)}"></label>
+    <label class="field manager-wide"><span>Explanation</span><textarea name="explanation" maxlength="2000" required>${escapeHTML(source.explanation || '')}</textarea></label>
+    <label class="field manager-wide"><span>Search keywords (comma separated)</span><input name="keywords" value="${escapeHTML((source.keywords || []).join(', '))}"></label>
+    <div class="form-actions manager-wide"><button type="submit" class="primary-button">${editing ? 'Save question' : 'Add question'}</button>${editing ? '<button type="button" class="secondary-button" data-cancel-bank-edit>Cancel edit</button>' : ''}</div>
+  </form>`;
+}
+function startGeneratedQuiz() {
+  const pool = builderQuestionPool();
+  if (!pool.length) {
+    showToast('No questions match this exact learning selection yet. Try another topic or difficulty.', 'warning');
+    return;
+  }
+  const difficulty = adaptiveDifficulty(pool, quizBuilderDraft);
+  const eligible = pool.filter(item => item.difficulty === difficulty);
+  if (!eligible.length) {
+    showToast(`No ${difficulty} questions are available for this exact learning selection yet.`, 'warning');
+    return;
+  }
+  const count = Math.min(Math.max(1, Number(quizBuilderDraft.questionCount) || 1), 20, eligible.length);
+  const chosen = quizBuilderPreviewQuestions.filter(question => eligible.some(item => item.id === question.id));
+  if (!quizBuilderDraft.preview || chosen.length !== count) {
+    showToast('Preview the current quiz selection before starting.', 'warning');
+    return;
+  }
+  const level = AtlasEducation.getById(AtlasEducation.levels, quizBuilderDraft.levelId);
+  const grade = AtlasEducation.getById(AtlasEducation.grades, quizBuilderDraft.gradeId);
+  const subject = getBuilderSubjects(quizBuilderDraft.levelId, quizBuilderDraft.curriculumId, quizBuilderDraft.gradeId).find(item => item.id === quizBuilderDraft.subjectId);
+  const topic = subject?.topics.find(item => item.id === quizBuilderDraft.topicId);
+  activeQuiz = {
+    id: `custom-${Date.now()}`, title: `${subject?.name || 'Learning'}${topic ? ` · ${topic.name}` : ''}`,
+    category: 'learning', difficulty, premium: false, description: `${level?.name || ''} · ${grade?.name || ''}`,
+    duration: Number(quizBuilderDraft.timeLimit) || 0,
+    metadata: {
+      countryId: quizBuilderDraft.countryId, curriculumId: quizBuilderDraft.curriculumId,
+      educationLevelId: quizBuilderDraft.levelId, gradeId: quizBuilderDraft.gradeId,
+      subjectId: quizBuilderDraft.subjectId, topicId: quizBuilderDraft.topicId,
+      mode: quizBuilderDraft.mode
+    }
+  };
+  quizSession = {
+    kind: 'bank', questions: chosen, current: 0, selected: null, answers: [],
+    responses: [], review: [], remaining: activeQuiz.duration * 60, finished: false,
+    timerEnabled: activeQuiz.duration > 0, immediateFeedback: quizBuilderDraft.mode === 'practice' && quizBuilderDraft.immediateFeedback,
+    mode: quizBuilderDraft.mode, confirming: false, savedAttemptId: ''
+  };
+  quizBuilderDraft.preview = false;
+  quizBuilderPreviewQuestions = [];
+  navigate('quiz');
 }
 
 function startQuiz(quizId) {
@@ -586,9 +1329,69 @@ function startQuiz(quizId) {
   quizSession = { questions, current: 0, selected: null, answers: [], remaining: 0, finished: false, timerEnabled: true };
   navigate('quiz');
 }
+function bankAnswerText(question, answer) {
+  if (answer === null || answer === undefined || answer === '') return 'Unanswered';
+  return Array.isArray(answer) ? answer.join(', ') : String(answer);
+}
+function bankCorrectAnswerText(question) {
+  if (Array.isArray(question.correctAnswer)) return question.correctAnswer.join(' / ');
+  return String(question.correctAnswer);
+}
+function bankResponseComplete(response) {
+  return Array.isArray(response) ? response.length > 0 : response !== null && response !== undefined && String(response).trim() !== '';
+}
+function updateBankResponse(response) {
+  if (!quizSession || quizSession.kind !== 'bank') return;
+  const index = quizSession.current;
+  const question = quizSession.questions[index];
+  quizSession.responses[index] = response;
+  quizSession.answers[index] = {
+    question,
+    response,
+    correct: AtlasQuestionBank.gradeAnswer(question, response)
+  };
+  if (quizSession.immediateFeedback && bankResponseComplete(response) && state.settings.sound) {
+    playFeedback(quizSession.answers[index].correct);
+  }
+}
+function bankQuizPage() {
+  const question = quizSession.questions[quizSession.current];
+  if (!question) return explorePage();
+  const response = quizSession.responses[quizSession.current];
+  const answered = bankResponseComplete(response);
+  const correct = answered && AtlasQuestionBank.gradeAnswer(question, response);
+  const showFeedback = quizSession.immediateFeedback && answered;
+  const progress = ((quizSession.current + 1) / quizSession.questions.length) * 100;
+  const selectedOptions = Array.isArray(response) ? response : [response];
+  const typeLabel = question.type.replaceAll('-', ' ');
+  let answerControl = '';
+  if (['multiple-choice', 'true-false', 'multiple-answer'].includes(question.type)) {
+    answerControl = `<div class="answer-list ${question.type === 'multiple-answer' ? 'multiple-answer-list' : ''}">${question.options.map((option, index) => {
+      const selected = selectedOptions.includes(option);
+      const isCorrect = Array.isArray(question.correctAnswer) ? question.correctAnswer.includes(option) : question.correctAnswer === option;
+      const className = showFeedback && isCorrect ? 'correct' : showFeedback && selected ? 'incorrect' : '';
+      return `<button type="button" class="answer-option ${className} ${selected ? 'selected' : ''}" data-bank-option="${escapeHTML(option)}" aria-pressed="${selected}"><span class="answer-key">${question.type === 'multiple-answer' ? selected ? '✓' : '+' : String.fromCharCode(65 + index)}</span><span>${escapeHTML(option)}</span></button>`;
+    }).join('')}</div>`;
+  } else {
+    answerControl = `<label class="field bank-typed-answer"><span>${question.type === 'numerical' ? 'Your numerical answer' : 'Your answer'}</span><input id="bank-typed-answer" type="${question.type === 'numerical' ? 'number' : 'text'}" ${question.type === 'numerical' ? 'step="any"' : 'maxlength="160"'} value="${escapeHTML(response ?? '')}" autocomplete="off"></label>`;
+  }
+  const answeredCount = quizSession.responses.filter(bankResponseComplete).length;
+  const unansweredCount = quizSession.questions.length - answeredCount;
+  return `<div class="quiz-shell">
+    <div class="quiz-topline"><button class="text-button" type="button" data-quiz-exit>← Exit quiz</button><span class="quiz-category-label">${escapeHTML(activeQuiz.title)} · ${quizSession.mode === 'assessment' ? 'Assessment' : 'Practice'}</span><span class="timer-pill ${quizSession.remaining <= 15 && quizSession.timerEnabled ? 'urgent' : ''}" id="quiz-timer">${icons.clock}<span>${quizSession.timerEnabled ? formatTimer(quizSession.remaining) : 'Untimed'}</span></span></div>
+    <div class="quiz-progress-copy"><span>Question ${quizSession.current + 1} of ${quizSession.questions.length}</span><span>${answeredCount} answered · ${Math.round(progress)}% visited</span></div><div class="quiz-progress-track"><span style="width:${progress}%"></span></div>
+    <nav class="question-navigation" aria-label="Question review navigation">${quizSession.questions.map((_, index) => `<button type="button" class="${index === quizSession.current ? 'current' : ''} ${bankResponseComplete(quizSession.responses[index]) ? 'answered' : ''} ${quizSession.review[index] ? 'marked-review' : ''}" data-bank-goto="${index}" aria-label="Question ${index + 1}${bankResponseComplete(quizSession.responses[index]) ? ', answered' : ', unanswered'}${quizSession.review[index] ? ', marked for review' : ''}">${index + 1}${quizSession.review[index] ? ' ⚑' : ''}</button>`).join('')}</nav>
+    <section class="question-card" aria-labelledby="question-title"><div class="question-number">QUESTION ${String(quizSession.current + 1).padStart(2, '0')} · ${escapeHTML(typeLabel.toUpperCase())} · ${escapeHTML(question.difficulty.toUpperCase())}</div><p class="question-instructions">${escapeHTML(question.instructions)}${question.type === 'multiple-answer' ? ' Select all that apply.' : ''}</p><h2 id="question-title">${escapeHTML(question.prompt)}</h2>
+      ${answerControl}
+      <div class="answer-explanation ${showFeedback ? `visible ${correct ? '' : 'wrong'}` : ''}" id="bank-answer-explanation">${showFeedback ? `${correct ? 'That’s right! ' : 'Not quite. '}${escapeHTML(question.explanation)}` : ''}</div>
+      <div class="quiz-controls"><button type="button" class="secondary-button" data-bank-previous ${quizSession.current === 0 ? 'disabled' : ''}>Previous</button><button type="button" class="secondary-button" data-bank-review>${quizSession.review[quizSession.current] ? 'Remove review mark' : 'Mark for review'}</button>${quizSession.current < quizSession.questions.length - 1 ? `<button type="button" class="primary-button" data-bank-next>Next question ${icons.arrow}</button>` : `<button type="button" class="primary-button" data-bank-submit>Submit ${quizSession.mode === 'assessment' ? 'assessment' : 'practice'} ${icons.arrow}</button>`}</div>
+      ${quizSession.confirming ? `<div class="quiz-submit-confirm" role="alert"><strong>Submit this session?</strong><span>${unansweredCount ? `${unansweredCount} question${unansweredCount === 1 ? ' is' : 's are'} unanswered and will be scored as unanswered.` : 'You can review your answers before final submission.'}</span><button type="button" class="primary-button" data-confirm-bank-submit>Confirm submission</button><button type="button" class="text-button" data-cancel-bank-submit>Continue quiz</button></div>` : ''}
+    </section></div>`;
+}
 function quizPage() {
   if (!activeQuiz || !quizSession) return explorePage();
   if (quizSession.finished) return resultPage();
+  if (quizSession.kind === 'bank') return bankQuizPage();
   const question = quizSession.questions[quizSession.current];
   const progress = (quizSession.current / quizSession.questions.length) * 100;
   return `<div class="quiz-shell">
@@ -627,13 +1430,14 @@ function startTimer() {
     if (quizSession.remaining <= 0) {
       window.clearInterval(timerId);
       quizSession.timerEnabled = false;
-      finishQuiz();
+      finishQuiz(quizSession.kind === 'bank');
       showToast('Time is up. Your answers have been saved.', 'warning');
     }
   }, 1000);
 }
 function resultPage() {
   if (!activeQuiz || !quizSession) return explorePage();
+  if (quizSession.kind === 'bank') return bankResultPage();
   const correct = quizSession.answers.filter(answer => answer.correct).length;
   const xpEarned = quizSession.xpEarned || 0;
   const percentage = Math.round(correct / quizSession.questions.length * 100);
@@ -643,6 +1447,41 @@ function resultPage() {
     <div class="result-actions"><button type="button" class="primary-button" data-retry-quiz>Try again ${icons.arrow}</button><button type="button" class="secondary-button" data-page="explore">Explore more</button>${incorrect.length ? '<button type="button" class="secondary-button" data-review-answers>Review missed questions</button>' : ''}</div>
     ${incorrect.length ? `<div class="review-list" id="review-list" hidden>${incorrect.map(answer => `<div class="review-item"><strong>${escapeHTML(answer.prompt)}</strong><span>Your answer: ${escapeHTML(answer.options[answer.selected] ?? 'No answer')}</span><span class="correct-answer">Correct answer: ${escapeHTML(answer.options[answer.answer])}</span><span>${escapeHTML(answer.explanation)}</span></div>`).join('')}</div>` : ''}
   </section></div>`;
+}
+function bankResultPage() {
+  const answers = quizSession.answers || [];
+  const correct = answers.filter(answer => answer?.correct).length;
+  const incorrect = answers.filter(answer => answer && bankResponseComplete(answer.response) && !answer.correct);
+  const unanswered = answers.filter(answer => !answer || !bankResponseComplete(answer.response));
+  const percentage = Math.round(correct / Math.max(1, quizSession.questions.length) * 100);
+  const xpEarned = quizSession.xpEarned || 0;
+  const topicGroups = new Map();
+  answers.forEach(answer => {
+    if (!answer?.question) return;
+    const key = `${answer.question.subjectId}|${answer.question.topicId}`;
+    if (!topicGroups.has(key)) topicGroups.set(key, { name: `${educationItemName(answer.question.subjectId)} · ${educationItemName(answer.question.topicId)}`, correct: 0, total: 0 });
+    const group = topicGroups.get(key);
+    group.total += 1;
+    if (answer.correct) group.correct += 1;
+  });
+  return `<div class="quiz-shell"><section class="result-card"><div class="result-icon">${percentage === 100 ? '💎' : percentage >= 60 ? '🎉' : '🌱'}</div><div class="eyebrow">${quizSession.mode === 'assessment' ? 'ASSESSMENT COMPLETE' : 'PRACTICE COMPLETE'}</div><h2>${percentage === 100 ? 'A perfect round!' : percentage >= 60 ? 'Look at you go!' : 'Every try teaches you something.'}</h2><p>You finished ${escapeHTML(activeQuiz.title)}. ${quizSession.mode === 'assessment' ? 'Review your submitted answers and explanations below.' : 'Keep practising to build confidence.'}</p>
+    <div class="result-stats"><div><strong>${correct}/${quizSession.questions.length}</strong><span>Correct answers</span></div><div><strong>${percentage}%</strong><span>Score</span></div><div><strong>+${xpEarned}</strong><span>XP earned</span></div></div>
+    <div class="result-answer-counts"><span class="result-correct">${correct} correct</span><span class="result-incorrect">${incorrect.length} incorrect</span><span>${unanswered.length} unanswered</span></div>
+    <section class="topic-performance"><h3>Topic performance</h3>${[...topicGroups.values()].map(item => `<div class="topic-performance-row"><span>${escapeHTML(item.name)}</span><strong>${item.correct}/${item.total} · ${Math.round(item.correct / item.total * 100)}%</strong></div>`).join('')}</section>
+    <div class="result-actions"><button type="button" class="primary-button" data-page="quiz-builder">Build another quiz ${icons.arrow}</button><button type="button" class="secondary-button" data-page="learn">Browse learning</button><button type="button" class="secondary-button" data-bank-review-answers>Hide answer review</button></div>
+    <div class="review-list" id="bank-review-list">${answers.map((answer, index) => {
+      const question = answer?.question || quizSession.questions[index];
+      const isUnanswered = !answer || !bankResponseComplete(answer.response);
+      return `<article class="review-item ${isUnanswered ? 'review-unanswered' : answer.correct ? 'review-correct' : 'review-incorrect'}"><strong>${index + 1}. ${escapeHTML(question.prompt)}</strong><span>Your answer: ${escapeHTML(bankAnswerText(question, answer?.response))}</span><span class="correct-answer">Correct answer: ${escapeHTML(bankCorrectAnswerText(question))}</span><span>${escapeHTML(question.explanation)}</span></article>`;
+    }).join('')}</div>
+  </section></div>`;
+}
+function educationItemName(id) {
+  const subject = AtlasEducation.subjects.find(item => item.id === id) ||
+    AtlasEducation.university.flatMap(faculty => faculty.programmes).flatMap(programme => programme.units).find(item => item.id === id);
+  if (subject) return subject.name;
+  const topic = [...AtlasEducation.subjects, ...AtlasEducation.university.flatMap(faculty => faculty.programmes).flatMap(programme => programme.units)].flatMap(item => item.topics).find(item => item.id === id);
+  return topic?.name || id;
 }
 function answerQuestion(index) {
   if (!quizSession || quizSession.selected !== null) return;
@@ -668,8 +1507,13 @@ function playFeedback(correct) {
     console.warn('Audio feedback is unavailable in this browser.', error);
   }
 }
-function finishQuiz() {
+function finishQuiz(force = false) {
   if (!activeQuiz || !quizSession || quizSession.finished) return;
+  if (quizSession.kind === 'bank' && !force) {
+    quizSession.confirming = true;
+    render();
+    return;
+  }
   if (!premiumQuizAccessAllowed(activeQuiz)) {
     if (timerId) window.clearInterval(timerId);
     timerId = null;
@@ -680,6 +1524,12 @@ function finishQuiz() {
     return;
   }
   const earnedBefore = new Set(achievements().filter(item => item.earned).map(item => item.id));
+  if (quizSession.kind === 'bank') {
+    quizSession.answers = quizSession.questions.map((question, index) => {
+      const response = quizSession.responses[index] ?? null;
+      return { question, response, correct: AtlasQuestionBank.gradeAnswer(question, response) };
+    });
+  }
   quizSession.finished = true;
   if (timerId) window.clearInterval(timerId);
   const correct = quizSession.answers.filter(answer => answer?.correct).length;
@@ -701,6 +1551,29 @@ function finishQuiz() {
   state.stats.activeDates = state.stats.activeDates.slice(-60);
   const now = new Date();
   const historyEntry = { quizId: activeQuiz.id, title: activeQuiz.title, category: activeQuiz.category, correct, total: quizSession.questions.length, xp, premiumQuiz: Boolean(activeQuiz.premium), date: now.toISOString() };
+  if (quizSession.kind === 'bank') {
+    const attempt = {
+      id: `attempt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title: activeQuiz.title, mode: quizSession.mode, completedAt: now.toISOString(),
+      metadata: activeQuiz.metadata, questions: quizSession.questions,
+      answers: quizSession.answers.map(({ response, correct: isCorrect }) => ({ response, correct: isCorrect }))
+    };
+    state.quizAttempts.unshift(attempt);
+    state.quizAttempts = state.quizAttempts.slice(0, 50);
+    historyEntry.attemptId = attempt.id;
+    quizSession.savedAttemptId = attempt.id;
+    for (const answer of quizSession.answers) {
+      const question = answer.question;
+      const metadata = activeQuiz.metadata;
+      const context = `${metadata.countryId}|${metadata.curriculumId}|${metadata.educationLevelId}|${metadata.gradeId}|${question.subjectId}`;
+      const subjectKey = `${context}|*`;
+      const topicKey = `${context}|${question.topicId}`;
+      const entry = { difficulty: question.difficulty, correct: answer.correct, answered: bankResponseComplete(answer.response), date: now.toISOString() };
+      for (const key of [subjectKey, topicKey]) {
+        state.topicPerformance[key] = [...(state.topicPerformance[key] || []), entry].slice(-20);
+      }
+    }
+  }
   state.history.unshift(historyEntry);
   state.history = state.history.slice(0, 100);
   const challengeRewards = [];
@@ -773,18 +1646,46 @@ function leaderboardPage() {
     </section><p class="leaderboard-disclaimer">Sample learner names and scores are fictional demonstration entries; they are not live global rankings. A real shared leaderboard requires backend accounts and consent.</p>`;
 }
 
+function quizAttemptsMarkup() {
+  if (!state.quizAttempts.length) return '<div class="recent-empty">Custom quiz reviews will appear here after you complete a session.</div>';
+  return `<div class="saved-attempt-list">${state.quizAttempts.slice(0, 10).map(attempt => {
+    const correct = attempt.answers.filter(answer => answer.correct).length;
+    return `<article class="saved-attempt-row"><div><strong>${escapeHTML(attempt.title)}</strong><span>${formatDate(attempt.completedAt)} · ${correct}/${attempt.questions.length} correct · ${escapeHTML(attempt.mode)}</span></div><button type="button" class="secondary-button" data-open-attempt="${escapeHTML(attempt.id)}">Review</button></article>`;
+  }).join('')}</div>`;
+}
+function openSavedAttempt(id) {
+  const attempt = state.quizAttempts.find(item => item.id === id);
+  if (!attempt) {
+    showToast('That completed quiz review could not be found.', 'warning');
+    return;
+  }
+  activeQuiz = {
+    id: attempt.id, title: attempt.title, category: 'learning', premium: false, duration: 0,
+    description: 'Saved completed quiz review', metadata: attempt.metadata
+  };
+  quizSession = {
+    kind: 'bank', questions: attempt.questions, current: 0, selected: null,
+    answers: attempt.questions.map((question, index) => ({
+      question, response: attempt.answers[index]?.response ?? null, correct: Boolean(attempt.answers[index]?.correct)
+    })),
+    responses: attempt.answers.map(answer => answer.response ?? null),
+    review: [], remaining: 0, finished: true, mode: attempt.mode, xpEarned: 0, savedAttemptId: attempt.id
+  };
+  navigate('quiz');
+}
 function profilePage() {
   const name = escapeHTML(state.profile.name);
   const email = escapeHTML(state.profile.email || '');
   const earned = achievements().filter(item => item.earned);
   const membershipLabel = membershipStatusLabel();
   const membership = membershipStatus();
-  return `${pageHeading('YOUR LEARNING, YOUR WAY', 'My profile', 'A personal snapshot of your progress on this browser.')}
+  return `${pageHeading('YOUR LEARNING, YOUR WAY', 'My profile', 'A personal snapshot of your progress on this browser.', '<button type="button" class="secondary-button" data-page="settings">Learning preferences</button>')}
     <section class="profile-hero"><div class="profile-avatar-large">${escapeHTML(initials(state.profile.name))}</div><div class="profile-info"><h2>${name}</h2><p>${email || 'No email added'} · Local demo profile</p><span class="profile-tag ${membership.isActive ? 'premium-profile-tag' : ''}">${membership.isActive ? '♛' : '✦'} ${membershipLabel}</span></div><button type="button" class="secondary-button" data-page="premium">Manage membership</button><button type="button" class="secondary-button" data-scroll-edit>Edit profile</button></section>
     ${membership.plan ? `<section class="membership-management ${membership.isExpired ? 'expired' : ''}" aria-label="Membership details"><div><span class="eyebrow">${membership.isExpired ? 'DEMO MEMBERSHIP EXPIRED' : 'CURRENT DEMO MEMBERSHIP'}</span><h2>Atlas Plus ${membership.plan === 'yearly' ? 'Yearly' : 'Monthly'}</h2><p>Started ${formatMembershipDate(membership.startedAt)} · ${membership.isExpired ? 'Expired' : 'Renews/ends'} ${formatMembershipDate(membership.expiresAt)}</p></div><button type="button" class="${membership.isExpired ? 'primary-button gold-button' : 'secondary-button'}" data-page="premium">${membership.isExpired ? 'Choose a plan again' : 'Manage plan'} ${icons.arrow}</button></section>` : ''}
     <div class="profile-stats"><div class="profile-stat"><strong>${state.stats.quizzes}</strong><span>Quizzes completed</span></div><div class="profile-stat"><strong>${state.stats.points}</strong><span>Learning points</span></div><div class="profile-stat"><strong>${earned.length}</strong><span>Badges earned</span></div></div>
     <section class="form-card" id="profile-edit"><h3>Profile details</h3><p>Only saved in this browser. This is not a verified account.</p><form id="profile-form"><div class="form-grid"><div class="field"><label for="profile-name">Display name</label><input id="profile-name" name="name" value="${name}" maxlength="40" required autocomplete="nickname"></div><div class="field"><label for="profile-email">Email (optional)</label><input id="profile-email" name="email" type="email" value="${email}" maxlength="120" autocomplete="email"></div></div><div class="form-actions"><button type="submit" class="primary-button">Save changes</button><span class="form-footnote">No password or authentication credentials are stored.</span></div></form></section>
     <section class="form-card" style="margin-top:15px"><div class="section-heading"><div><h3>Recent quiz activity</h3><p>Your recent sessions and earned experience.</p></div><button class="text-button" type="button" data-page="rewards">View rewards</button></div>${historyMarkup(8)}</section>
+    <section class="form-card saved-attempts-card"><div class="section-heading"><div><h3>Completed custom quizzes</h3><p>Review saved answers, scores and explanations.</p></div><button class="text-button" type="button" data-page="quiz-builder">Create quiz</button></div>${quizAttemptsMarkup()}</section>
     <div class="danger-zone"><div><strong>${state.profile.signedIn ? 'Sign out of demo mode' : 'Continue as a demo learner'}</strong><span>${state.profile.signedIn ? 'Progress remains saved in this browser and is not protected by an account.' : 'Enter a display name to set up a local demo profile.'}</span></div><button type="button" class="danger-button" data-sign-out>${state.profile.signedIn ? 'Sign out' : 'Continue in demo mode'}</button></div>`;
 }
 function membershipStatusLabel() {
@@ -797,6 +1698,7 @@ function membershipStatusLabel() {
 function settingsPage() {
   return `${pageHeading('MAKE IT FEEL LIKE YOURS', 'Settings', 'Personalize your learning space. Changes save on this device.')}
     <div class="settings-layout">
+      ${educationPreferenceForm()}
       <section class="settings-card"><div class="settings-card-head"><span class="settings-card-icon">${icons.explore}</span><div><h3>Appearance</h3><p>Choose a comfortable look for every session.</p></div></div>
         <div class="setting-row"><div><strong>Color theme</strong><p>Switch between a light and dark workspace.</p></div><select id="setting-theme" aria-label="Color theme"><option value="light" ${state.settings.theme === 'light' ? 'selected' : ''}>Light</option><option value="dark" ${state.settings.theme === 'dark' ? 'selected' : ''}>Dark</option></select></div>
         <div class="setting-row"><div><strong>Font family</strong><p>Choose the reading style you like best.</p></div><select id="setting-font" aria-label="Font family">${['DM Sans','Inter','Poppins','Montserrat','Outfit','Roboto','Space Grotesk','Nunito','Nunito Sans'].map(font => `<option ${state.settings.font === font ? 'selected' : ''}>${font}</option>`).join('')}</select></div>
@@ -823,9 +1725,10 @@ function authPage() {
     <div class="auth-switch"><button type="button" data-page="home">Continue as guest</button></div></section>`;
 }
 
-const pageLabels = { home: 'Home', explore: 'Explore quizzes', categories: 'Categories', premium: 'Premium', plus: 'Atlas Plus', rewards: 'Rewards', leaderboard: 'Leaderboard', profile: 'My profile', settings: 'Settings', auth: 'Demo profile', quiz: 'Quiz session', verify: 'Certificate verification' };
+const pageLabels = { home: 'Home', explore: 'Explore quizzes', categories: 'Categories', learn: 'Learn', 'quiz-builder': 'Quiz studio', premium: 'Premium', plus: 'Atlas Plus', rewards: 'Rewards', leaderboard: 'Leaderboard', profile: 'My profile', settings: 'Settings', auth: 'Demo profile', quiz: 'Quiz session', verify: 'Certificate verification' };
 function navigate(page) {
   if (timerId && page !== 'quiz') window.clearInterval(timerId);
+  if (page === 'settings' && activePage !== 'settings') educationSettingsDraft = null;
   activePage = page;
   if (location.hash !== `#${page}`) history.replaceState(null, '', `#${page}`);
   render();
@@ -848,7 +1751,7 @@ function render() {
   renderUser();
   document.getElementById('current-page-label').textContent = pageLabels[activePage] || 'Home';
   const page = {
-    home: dashboardPage, explore: explorePage, categories: categoriesPage, premium: premiumPage, plus: plusDashboardPage,
+    home: dashboardPage, explore: explorePage, categories: categoriesPage, learn: educationPage, 'quiz-builder': quizBuilderPage, premium: premiumPage, plus: plusDashboardPage,
     rewards: rewardsPage, leaderboard: leaderboardPage, profile: profilePage, settings: settingsPage,
     auth: authPage, quiz: quizPage, verify: verifyCertificatePage
   }[activePage] || dashboardPage;
@@ -948,6 +1851,339 @@ function premiumPage() {
 }
 
 function bindPageInteractions() {
+  const builderSearch = document.getElementById('builder-search');
+  builderSearch?.addEventListener('input', event => {
+    quizBuilderSearch = event.target.value;
+    const position = event.target.selectionStart;
+    render();
+    const next = document.getElementById('builder-search');
+    next?.focus();
+    next?.setSelectionRange(position, position);
+  });
+  document.querySelectorAll('[data-builder-select]').forEach(control => control.addEventListener('change', () => {
+    initializeQuizBuilder();
+    const draft = quizBuilderDraft;
+    const key = control.dataset.builderSelect;
+    const value = control.value;
+    if (key === 'levelId') {
+      draft.levelId = value;
+      draft.curriculumId = AtlasEducation.getCurricula(value)[0]?.id || '';
+      draft.gradeId = AtlasEducation.getGrades(value, draft.curriculumId)[0]?.id || '';
+      draft.combinationId = '';
+      draft.subjectId = defaultBuilderSubject(getBuilderSubjects(draft.levelId, draft.curriculumId, draft.gradeId), draft.gradeId)?.id || '';
+      draft.topicId = '';
+    } else if (key === 'curriculumId') {
+      draft.curriculumId = value;
+      draft.gradeId = AtlasEducation.getGrades(draft.levelId, value)[0]?.id || '';
+      draft.combinationId = '';
+      draft.subjectId = defaultBuilderSubject(getBuilderSubjects(draft.levelId, draft.curriculumId, draft.gradeId), draft.gradeId)?.id || '';
+      draft.topicId = '';
+    } else if (key === 'gradeId') {
+      draft.gradeId = value;
+      draft.subjectId = defaultBuilderSubject(getBuilderSubjects(draft.levelId, draft.curriculumId, value), value)?.id || '';
+      draft.topicId = '';
+    } else if (key === 'subjectId') {
+      draft.subjectId = value;
+      draft.topicId = '';
+    } else if (key === 'topicId') draft.topicId = value;
+    else if (key === 'timeLimit') draft.timeLimit = Number(value);
+    else if (key === 'mode') draft.mode = value;
+    else if (key === 'difficulty') draft.difficulty = value;
+    else if (key === 'questionType') draft.questionType = value;
+    else if (key === 'countryId') draft.countryId = value;
+    draft.preview = false;
+    quizBuilderPreviewQuestions = [];
+    render();
+  }));
+  document.querySelector('[data-builder-number="questionCount"]')?.addEventListener('input', event => {
+    quizBuilderDraft.questionCount = Math.min(20, Math.max(1, Number(event.target.value) || 1));
+    quizBuilderDraft.preview = false;
+    quizBuilderPreviewQuestions = [];
+    document.querySelector('.quiz-preview')?.remove();
+    document.querySelector('[data-start-generated]')?.setAttribute('disabled', '');
+  });
+  document.querySelector('[data-builder-feedback]')?.addEventListener('change', event => {
+    quizBuilderDraft.immediateFeedback = event.target.checked;
+  });
+  document.querySelector('[data-preview-generated]')?.addEventListener('click', () => {
+    const pool = builderQuestionPool();
+    const difficulty = adaptiveDifficulty(pool, quizBuilderDraft);
+    const eligible = pool.filter(item => item.difficulty === difficulty);
+    for (let index = eligible.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [eligible[index], eligible[swapIndex]] = [eligible[swapIndex], eligible[index]];
+    }
+    quizBuilderPreviewQuestions = eligible.slice(0, Math.min(Number(quizBuilderDraft.questionCount) || 1, 20));
+    quizBuilderDraft.preview = true;
+    render();
+  });
+  document.querySelector('[data-start-generated]')?.addEventListener('click', startGeneratedQuiz);
+  document.querySelectorAll('[data-search-result]').forEach(button => button.addEventListener('click', () => {
+    const [gradeId, subjectId, topicId] = button.dataset.searchResult.split('|');
+    const grade = AtlasEducation.getById(AtlasEducation.grades, gradeId);
+    if (!grade) {
+      showToast('This learning topic is no longer available.', 'warning');
+      return;
+    }
+    const combination = AtlasEducation.pathways.flatMap(pathway => pathway.combinations)
+      .find(item => item.subjectIds.includes(subjectId));
+    quizBuilderDraft = {
+      ...quizBuilderDraft,
+      countryId: 'KE', levelId: grade.levelId, curriculumId: grade.curriculumId,
+      gradeId, subjectId, topicId, combinationId: combination?.id || '',
+      difficulty: 'beginner', questionType: 'all', questionCount: 5, preview: false
+    };
+    quizBuilderPreviewQuestions = [];
+    navigate('quiz-builder');
+  }));
+  document.querySelectorAll('[data-practice-topic]').forEach(button => button.addEventListener('click', () => {
+    const preference = educationPreferences();
+    initializeQuizBuilder();
+    const subject = getBuilderSubjects(preference.levelId, preference.curriculumId, preference.gradeId)
+      .find(item => item.id === preference.subjectId);
+    if (!subject?.topics.some(item => item.id === button.dataset.practiceTopic)) {
+      showToast('This topic is not available in the selected learning context.', 'warning');
+      return;
+    }
+    quizBuilderDraft = {
+      ...quizBuilderDraft, countryId: preference.countryId === 'KE' ? 'KE' : 'OTHER',
+      levelId: preference.levelId, curriculumId: preference.curriculumId, gradeId: preference.gradeId,
+      subjectId: preference.subjectId, topicId: button.dataset.practiceTopic,
+      combinationId: preference.combinationId || '', difficulty: 'beginner',
+      questionType: 'all', questionCount: 5, preview: false
+    };
+    quizBuilderPreviewQuestions = [];
+    navigate('quiz-builder');
+  }));
+  document.querySelectorAll('[data-edit-bank-question]').forEach(button => button.addEventListener('click', () => {
+    bankQuestionEditId = button.dataset.editBankQuestion;
+    render();
+  }));
+  document.querySelectorAll('[data-delete-bank-question]').forEach(button => button.addEventListener('click', () => {
+    const id = button.dataset.deleteBankQuestion;
+    if (bankQuestionDeleteConfirmId !== id) {
+      bankQuestionDeleteConfirmId = id;
+      showToast('Select Remove again to confirm removing this custom question.', 'warning');
+      return;
+    }
+    const previous = state.customQuestions;
+    state.customQuestions = previous.filter(item => item.id !== id);
+    bankQuestionDeleteConfirmId = null;
+    if (persist()) {
+      quizBuilderDraft.preview = false;
+      quizBuilderPreviewQuestions = [];
+      render();
+    }
+    else {
+      state.customQuestions = previous;
+      bankQuestionDeleteConfirmId = id;
+    }
+  }));
+  document.querySelector('[data-cancel-bank-edit]')?.addEventListener('click', () => {
+    bankQuestionEditId = null;
+    render();
+  });
+  const questionManager = document.getElementById('bank-question-form');
+  document.querySelector('.question-manager')?.addEventListener('toggle', event => {
+    bankQuestionManagerOpen = event.currentTarget.open;
+  });
+  questionManager?.addEventListener('change', event => {
+    if (!(event.target instanceof HTMLSelectElement)) return;
+    const form = questionManager;
+    if (event.target.name === 'educationLevelId') {
+      const curricula = AtlasEducation.getCurricula(event.target.value);
+      form.elements.curriculumId.innerHTML = curricula.map(item => `<option value="${escapeHTML(item.id)}">${escapeHTML(item.name)}</option>`).join('');
+      form.elements.curriculumId.value = curricula[0]?.id || '';
+    }
+    const levelId = String(form.elements.educationLevelId.value || '');
+    const curriculumId = String(form.elements.curriculumId.value || '');
+    if (['educationLevelId', 'curriculumId'].includes(event.target.name)) {
+      const grades = AtlasEducation.getGrades(levelId, curriculumId);
+      form.elements.gradeId.innerHTML = grades.map(item => `<option value="${escapeHTML(item.id)}">${escapeHTML(item.name)}</option>`).join('');
+    }
+    if (['educationLevelId', 'curriculumId', 'gradeId'].includes(event.target.name)) {
+      const gradeId = String(form.elements.gradeId.value || '');
+      const subjects = levelId === 'university'
+        ? AtlasEducation.university.flatMap(faculty => faculty.programmes).flatMap(programme => programme.units).filter(item => item.academicYearId === gradeId)
+        : AtlasEducation.getSubjectsForGrade(gradeId);
+      form.elements.subjectId.innerHTML = subjects.map(item => `<option value="${escapeHTML(item.id)}">${escapeHTML(item.name)}</option>`).join('');
+    }
+    if (['educationLevelId', 'curriculumId', 'gradeId', 'subjectId'].includes(event.target.name)) {
+      const subject = [...AtlasEducation.subjects, ...AtlasEducation.university.flatMap(faculty => faculty.programmes).flatMap(programme => programme.units)]
+        .find(item => item.id === form.elements.subjectId.value);
+      form.elements.topicId.innerHTML = (subject?.topics || []).map(item => `<option value="${escapeHTML(item.id)}">${escapeHTML(item.name)}</option>`).join('');
+    }
+  });
+  questionManager?.addEventListener('submit', event => {
+    event.preventDefault();
+    const values = new FormData(questionManager);
+    const id = bankQuestionEditId || AtlasQuestionBank.newId();
+    const levelId = String(values.get('educationLevelId') || '');
+    const curriculumId = String(values.get('curriculumId') || '');
+    const gradeId = String(values.get('gradeId') || '');
+    const grade = AtlasEducation.getById(AtlasEducation.grades, gradeId);
+    const subjects = levelId === 'university'
+      ? AtlasEducation.university.flatMap(faculty => faculty.programmes).flatMap(programme => programme.units).filter(item => item.academicYearId === gradeId)
+      : AtlasEducation.getSubjectsForGrade(gradeId);
+    const subject = subjects.find(item => item.id === values.get('subjectId'));
+    if (!grade || !subject || grade.levelId !== levelId || grade.curriculumId !== curriculumId ||
+      (levelId === 'university' && subject.academicYearId !== gradeId) ||
+      !subject.topics.some(item => item.id === values.get('topicId'))) {
+      showToast('Select a grade, subject and topic that belong together.', 'warning');
+      return;
+    }
+    const rawAnswer = String(values.get('correctAnswer') || '').trim();
+    const type = String(values.get('type') || '');
+    const correctAnswer = type === 'multiple-answer' || type === 'short-answer'
+      ? rawAnswer.split('|').map(item => item.trim()).filter(Boolean)
+      : type === 'numerical' ? Number(rawAnswer) : rawAnswer;
+    const item = {
+      id, countryId: String(values.get('countryId') || ''),
+      curriculumId, educationLevelId: levelId, gradeId, subjectId: subject.id,
+      topicId: String(values.get('topicId') || ''), difficulty: String(values.get('difficulty') || ''),
+      type, prompt: String(values.get('prompt') || ''), instructions: String(values.get('instructions') || ''),
+      options: String(values.get('options') || '').split(/\r?\n/).map(option => option.trim()).filter(Boolean),
+      correctAnswer, explanation: String(values.get('explanation') || ''),
+      tolerance: Number(values.get('tolerance') || 0),
+      keywords: String(values.get('keywords') || '').split(',').map(keyword => keyword.trim()).filter(Boolean),
+      source: 'custom', sample: true
+    };
+    const existing = [...AtlasQuestionBank.questions, ...state.customQuestions];
+    const validation = bankQuestionEditId
+      ? AtlasQuestionBank.updateQuestion(bankQuestionEditId, item, existing)
+      : AtlasQuestionBank.createQuestion(item, existing);
+    if (!validation.valid) {
+      showToast(validation.error, 'warning');
+      return;
+    }
+    const previous = state.customQuestions;
+    state.customQuestions = bankQuestionEditId
+      ? state.customQuestions.map(question => question.id === bankQuestionEditId ? validation.question : question)
+      : [...state.customQuestions, validation.question];
+    if (!persist()) {
+      state.customQuestions = previous;
+      return;
+    }
+    bankQuestionEditId = null;
+    quizBuilderDraft.preview = false;
+    quizBuilderPreviewQuestions = [];
+    showToast('Question saved to the local sample question bank.', 'success');
+    render();
+  });
+  const educationSearch = (id, update) => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.addEventListener('input', event => {
+      update(event.target.value);
+      const position = event.target.selectionStart;
+      render();
+      const next = document.getElementById(id);
+      next?.focus();
+      next?.setSelectionRange(position, position);
+    });
+  };
+  educationSearch('education-subject-search', value => { educationSearchQuery = value; });
+  educationSearch('education-topic-search', value => { educationTopicSearchQuery = value; });
+  document.querySelectorAll('[data-education-level]').forEach(card => card.addEventListener('click', () => selectEducationLevel(card.dataset.educationLevel)));
+  document.querySelectorAll('[data-education-curriculum]').forEach(card => card.addEventListener('click', () => selectEducationCurriculum(card.dataset.educationCurriculum)));
+  document.querySelectorAll('[data-education-grade]').forEach(card => card.addEventListener('click', () => selectEducationGrade(card.dataset.educationGrade)));
+  document.querySelectorAll('[data-education-pathway]').forEach(card => card.addEventListener('click', () => selectEducationPathway(card.dataset.educationPathway)));
+  document.querySelectorAll('[data-education-combination]').forEach(card => card.addEventListener('click', () => selectEducationCombination(card.dataset.educationCombination)));
+  document.querySelectorAll('[data-education-faculty]').forEach(card => card.addEventListener('click', () => selectEducationFaculty(card.dataset.educationFaculty)));
+  document.querySelectorAll('[data-education-programme]').forEach(card => card.addEventListener('click', () => selectEducationProgramme(card.dataset.educationProgramme)));
+  document.querySelectorAll('[data-education-year]').forEach(card => card.addEventListener('click', () => selectEducationGrade(card.dataset.educationYear)));
+  document.querySelectorAll('[data-education-semester]').forEach(card => card.addEventListener('click', () => selectEducationSemester(card.dataset.educationSemester)));
+  document.querySelectorAll('[data-education-subject]').forEach(card => card.addEventListener('click', () => openEducationSubject(card.dataset.educationSubject)));
+  document.querySelectorAll('[data-recent-subject]').forEach(card => card.addEventListener('click', () => openRecentEducationSubject(card.dataset.recentSubject)));
+  document.querySelectorAll('[data-education-topic]').forEach(card => card.addEventListener('click', () => openEducationTopic(card.dataset.educationTopic)));
+  document.querySelectorAll('[data-education-back]').forEach(button => button.addEventListener('click', () => backEducation(button.dataset.educationBack)));
+  const educationForm = document.getElementById('education-preferences-form');
+  educationForm?.addEventListener('change', event => {
+    const control = event.target;
+    if (!(control instanceof HTMLSelectElement)) return;
+    educationSettingsDraft = structuredClone(educationSettingsDraft || state.profile.education);
+    const draft = educationSettingsDraft;
+    switch (control.name) {
+      case 'country':
+        draft.countryId = control.value === 'KE' ? 'KE' : 'OTHER';
+        draft.countryName = control.value === 'KE' ? 'Kenya' : '';
+        break;
+      case 'level':
+        draft.levelId = control.value;
+        Object.assign(draft, { curriculumId: '', gradeId: '', academicYearId: '', pathwayId: '', combinationId: '', facultyId: '', programmeId: '', semesterId: '', preferredSubjectIds: [] });
+        break;
+      case 'curriculum':
+        draft.curriculumId = control.value;
+        Object.assign(draft, { gradeId: '', academicYearId: '', pathwayId: '', combinationId: '', facultyId: '', programmeId: '', semesterId: '', preferredSubjectIds: [] });
+        break;
+      case 'grade':
+        draft.gradeId = control.value;
+        draft.academicYearId = draft.levelId === 'university' ? control.value : '';
+        draft.semesterId = '';
+        if (draft.levelId === 'university') {
+          const validUnits = AtlasEducation.getUnits(draft.programmeId, draft.academicYearId, '');
+          draft.preferredSubjectIds = draft.preferredSubjectIds.filter(id => validUnits.some(item => item.id === id));
+        } else {
+          const selectedCombination = AtlasEducation.pathways.flatMap(item => item.combinations).find(item => item.id === draft.combinationId);
+          const validSubjects = AtlasEducation.getSubjectsForGrade(draft.gradeId, selectedCombination?.subjectIds || []).map(item => item.id);
+          draft.preferredSubjectIds = draft.preferredSubjectIds.filter(id => validSubjects.includes(id));
+        }
+        break;
+      case 'pathway':
+        draft.pathwayId = control.value;
+        Object.assign(draft, { combinationId: '', gradeId: '', preferredSubjectIds: [] });
+        break;
+      case 'combination':
+        draft.combinationId = control.value;
+        Object.assign(draft, { gradeId: '', preferredSubjectIds: [] });
+        break;
+      case 'faculty':
+        draft.facultyId = control.value;
+        Object.assign(draft, { programmeId: '', academicYearId: '', gradeId: '', semesterId: '', preferredSubjectIds: [] });
+        break;
+      case 'programme':
+        draft.programmeId = control.value;
+        Object.assign(draft, { academicYearId: '', gradeId: '', semesterId: '', preferredSubjectIds: [] });
+        break;
+      case 'semester':
+        draft.semesterId = control.value;
+        break;
+      default:
+        return;
+    }
+    render();
+  });
+  educationForm?.addEventListener('submit', event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const draft = educationSettingsDraft || structuredClone(state.profile.education);
+    const countryId = values.get('country') === 'KE' ? 'KE' : 'OTHER';
+    const countryName = countryId === 'KE' ? 'Kenya' : String(values.get('countryName') || '').trim().slice(0, 80);
+    if (countryId !== 'KE' && !countryName) {
+      showToast('Enter the country name before saving your education preferences.', 'warning');
+      return;
+    }
+    const levelId = String(values.get('level') || '');
+    const curriculumId = String(values.get('curriculum') || '');
+    const gradeId = String(values.get('grade') || '');
+    const patch = {
+      countryId, countryName, levelId, curriculumId, gradeId,
+      academicYearId: levelId === 'university' ? gradeId : '',
+      preferredSubjectIds: values.getAll('preferredSubjectIds').map(String),
+      pathwayId: String(values.get('pathway') || ''),
+      combinationId: String(values.get('combination') || ''),
+      facultyId: String(values.get('faculty') || ''),
+      programmeId: String(values.get('programme') || ''),
+      semesterId: String(values.get('semester') || ''),
+      subjectId: '', topicId: ''
+    };
+    if (saveEducationPreferences(patch, 'Education preferences saved. Your quiz progress and achievements are unchanged.')) {
+      educationSettingsDraft = null;
+      educationStage = null;
+      render();
+    }
+  });
   const search = document.getElementById('quiz-search');
   if (search) search.addEventListener('input', event => { searchQuery = event.target.value; const position = search.selectionStart; render(); const next = document.getElementById('quiz-search'); next.focus(); next.setSelectionRange(position, position); });
   document.getElementById('setting-theme')?.addEventListener('change', event => { state.settings.theme = event.target.value; persist(); render(); showToast('Theme preference saved.', 'success'); });
@@ -968,6 +2204,71 @@ function bindPageInteractions() {
     card.addEventListener('click', open);
     card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } });
   });
+  document.querySelectorAll('[data-bank-option]').forEach(button => button.addEventListener('click', () => {
+    const question = quizSession?.questions[quizSession.current];
+    if (!question || quizSession.kind !== 'bank') return;
+    const value = button.dataset.bankOption;
+    if (question.type === 'multiple-answer') {
+      const current = Array.isArray(quizSession.responses[quizSession.current]) ? quizSession.responses[quizSession.current] : [];
+      updateBankResponse(current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
+    } else updateBankResponse(value);
+    render();
+  }));
+  document.getElementById('bank-typed-answer')?.addEventListener('input', event => {
+    updateBankResponse(event.target.value);
+    const position = event.target.selectionStart;
+    render();
+    const next = document.getElementById('bank-typed-answer');
+    next?.focus();
+    if (next && next.type !== 'number' && position !== null) next.setSelectionRange(position, position);
+  });
+  document.querySelectorAll('[data-bank-goto]').forEach(button => button.addEventListener('click', () => {
+    if (!quizSession || quizSession.kind !== 'bank' || quizSession.finished) return;
+    quizSession.current = Number(button.dataset.bankGoto);
+    quizSession.confirming = false;
+    render();
+  }));
+  document.querySelector('[data-bank-previous]')?.addEventListener('click', () => {
+    if (!quizSession || quizSession.current <= 0) return;
+    quizSession.current -= 1;
+    quizSession.confirming = false;
+    render();
+  });
+  document.querySelector('[data-bank-next]')?.addEventListener('click', () => {
+    if (!quizSession || quizSession.current >= quizSession.questions.length - 1) return;
+    quizSession.current += 1;
+    quizSession.confirming = false;
+    render();
+  });
+  document.querySelector('[data-bank-review]')?.addEventListener('click', () => {
+    quizSession.review[quizSession.current] = !quizSession.review[quizSession.current];
+    render();
+  });
+  document.querySelector('[data-bank-submit]')?.addEventListener('click', () => {
+    if (!quizSession || quizSession.finished) return;
+    quizSession.confirming = true;
+    render();
+  });
+  document.querySelector('[data-confirm-bank-submit]')?.addEventListener('click', () => finishQuiz(true));
+  document.querySelector('[data-cancel-bank-submit]')?.addEventListener('click', () => {
+    quizSession.confirming = false;
+    render();
+  });
+  document.querySelector('[data-quiz-exit]')?.addEventListener('click', () => {
+    const returnPage = quizSession?.savedAttemptId ? 'profile' : 'quiz-builder';
+    if (quizSession?.kind === 'bank' && !quizSession.finished && (quizSession.answers.some(Boolean) || quizSession.responses.some(bankResponseComplete))) {
+      if (window.confirm('Exit this quiz? Your current answers will not be scored or saved.')) navigate(returnPage);
+      return;
+    }
+    navigate(returnPage);
+  });
+  document.querySelector('[data-bank-review-answers]')?.addEventListener('click', event => {
+    const review = document.getElementById('bank-review-list');
+    const hidden = !review.hidden;
+    review.hidden = hidden;
+    event.currentTarget.textContent = hidden ? 'Show answer review' : 'Hide answer review';
+  });
+  document.querySelectorAll('[data-open-attempt]').forEach(button => button.addEventListener('click', () => openSavedAttempt(button.dataset.openAttempt)));
   document.querySelectorAll('[data-answer]').forEach(button => button.addEventListener('click', () => answerQuestion(Number(button.dataset.answer))));
   document.querySelector('[data-quiz-next]')?.addEventListener('click', () => {
     if (!quizSession || quizSession.selected === null) return;

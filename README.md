@@ -18,6 +18,11 @@ Then open [http://localhost:8000](http://localhost:8000). If Python is not insta
 - Multiple-choice quizzes with randomized questions, selectable available difficulty sets, a countdown timer, immediate feedback, explanations, score summaries, and missed-answer review.
 - XP, learning points, streaks, earned badges, and weekly/monthly challenge progress based on completed quiz sessions.
 - Browser-persisted theme, font, text size, profile display name, preferences, and quiz history.
+- A browsable education library for Pre-Primary, Primary, Secondary (separate CBC and 8-4-4 pathways), and University studies.
+- Saved country, curriculum, level, grade/year, pathway, programme and preferred-subject choices; education preferences do not replace quiz history, rewards or certificates.
+- A custom quiz studio with exact learning-context filters, beginner/intermediate/advanced and adaptive practice, five answer formats, optional timers, preview, answer review and saved attempts.
+- Topic and concept discovery across the sample education catalog and available sample questions.
+- A local question-bank manager for creating, editing and removing custom sample questions.
 - Browser-local Atlas Plus demo memberships with monthly/yearly pricing, simulated start/expiry dates, cancellation, expiry testing, and centralized premium quiz access checks.
 - Exclusive Atlas Plus dashboard, performance statistics, achievement badges, and weekly/monthly challenges earned through completed premium quizzes.
 - Achievement-based certificate previews with unique local IDs, QR checks, and browser print-to-PDF.
@@ -34,3 +39,15 @@ Certificates require an earned perfect quiz score and eligible Premium demo memb
 A production launch needs a secure backend and authentication provider for accounts and per-user progress; server-side membership entitlements and expiry checks integrated with a trusted payment provider for Atlas Plus; a server-side certificate registry and verification endpoint; and a consent-aware service for shared leaderboards and notifications. Keep the current browser-only membership provider confined to demo environments when integrating production services.
 
 Google Fonts are loaded from Google Fonts when an internet connection is available. The app uses system fallbacks when they are unavailable.
+
+## Education catalog
+
+`education-data.js` contains the reusable education catalog and lookup helpers used by the Learn page. Education levels, curricula, grades, pathways, subject offerings, topics, university faculties, programmes and units are represented as separate data collections with stable IDs. Add or adjust catalog entries there rather than embedding curriculum data in page markup. The browser-only profile stores selection IDs so the catalog can later be backed by a database.
+
+The included subjects, units and topics are illustrative sample content for demonstrating navigation. They are not verified official curriculum requirements or a substitute for curriculum-authority materials.
+
+## Quiz question bank
+
+`question-bank.js` contains sample questions and reusable filtering, validation and answer-grading helpers. Each question is tagged with country, curriculum, education level, grade or academic year, subject or unit, topic, difficulty and format. The Quiz studio matches all selected context fields before generating a session. Use **Manage question bank** in the studio to add, edit or remove locally stored custom questions. Completed custom quiz attempts and custom questions are saved in this browser alongside the demo profile.
+
+Adaptive practice uses the learner's recent saved results for the selected topic to choose a difficulty. All questions in this repository are illustrative samples; no AI service is connected and no question should be treated as verified official curriculum content. This browser-only demo has no shared question-bank backend.
