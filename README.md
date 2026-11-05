@@ -20,23 +20,29 @@ Then open [http://localhost:8000](http://localhost:8000). If Python is not insta
 - Browser-persisted theme, font, text size, profile display name, preferences, and quiz history.
 - A browsable education library for Pre-Primary, Primary, Secondary (separate CBC and 8-4-4 pathways), and University studies.
 - Saved country, curriculum, level, grade/year, pathway, programme and preferred-subject choices; education preferences do not replace quiz history, rewards or certificates.
-- A custom quiz studio with exact learning-context filters, beginner/intermediate/advanced and adaptive practice, five answer formats, optional timers, preview, answer review and saved attempts.
+- A custom quiz studio with exact learning-context filters, free five-question multiple-choice practice, and Premium-only advanced/adaptive difficulty, five answer formats, timed assessments, preview, answer review and saved attempts.
 - Topic and concept discovery across the sample education catalog and available sample questions.
-- A local question-bank manager for creating, editing and removing custom sample questions.
-- Browser-local Atlas Plus demo memberships with monthly/yearly pricing, simulated start/expiry dates, cancellation, expiry testing, and centralized premium quiz access checks.
+- A Premium local question-bank manager for creating, editing and removing custom sample questions.
+- Free and Premium membership comparison, profile status, configurable monthly/yearly demo pricing, membership dates, downgrade controls, and a shared upgrade gate.
+- Free access to the learning catalog, free quizzes, scores and progress, with a configurable monthly quiz-start allowance and focused five-question practice sessions; Premium demo access unlocks unlimited starts, larger sessions, more question formats, advanced settings, reports, challenges, badges and eligible certificate previews.
+- Learner dashboard with saved quiz totals, score averages, newly tracked quiz time, recorded streak, chosen education pathway, activity, and curriculum-topic progress from fully answered Quiz Studio sessions.
+- Learning analytics with saved-result history and a seven-day score chart; Premium adds education-level, subject, topic, and date filters plus subject and topic performance breakdowns.
+- Rule-based achievements with earned dates, plus a print-friendly Atlas Learn-issued certificate for an earned perfect quiz score. Certificates are not official accreditation.
 - Exclusive Atlas Plus dashboard, performance statistics, achievement badges, and weekly/monthly challenges earned through completed premium quizzes.
 - Achievement-based certificate previews with unique local IDs, QR checks, and browser print-to-PDF.
 - Keyboard-friendly navigation, reduced-motion support, and light/dark themes.
 
 ## Demo-mode limitations
 
-There is **no backend or secure authentication provider** configured. The profile is a local display profile, not an account; no password is requested or stored. Anyone with access to this browser profile can see or change its local demo data. Profile, settings, and quiz progress do not sync between devices. The optional profile email is stored only in this browser.
+There is **no backend or secure authentication provider** configured. The profile is a local display profile, not an account; no password is requested or stored. Anyone with access to this browser profile can see or change its local demo data. Profile, settings, membership state, and quiz progress do not sync between devices. The optional profile email is stored only in this browser.
 
-The leaderboard uses fictional sample learners and is not a live global ranking. Atlas Plus membership is a clearly labelled local demo: it does not process payments, create a real subscription, or securely authorize users. Demo membership dates and entitlements can be changed by anyone with access to the browser profile. Do not enter passwords or payment-card details.
+The leaderboard uses fictional sample learners and is not a live global ranking. Atlas Plus membership is a clearly labelled local demo: confirming a demo plan does not process or verify payment, create a real subscription, or securely authorize users. Demo membership dates and entitlements can be changed by anyone with access to the browser profile. Do not enter passwords or payment-card details. Free quiz limits and Premium prices are configured in `app.js`; changing browser storage or code is not secure enforcement.
 
-Certificates require an earned perfect quiz score and eligible Premium demo membership; buying or enabling a membership does not grant the achievement. The PDF action opens the browser print dialog, where you can choose **Save as PDF**. QR images are requested from [QR Server](https://qrserver.com/) and verify only against local browser data; they are not portable or independently trustworthy credentials. The Premium graduation collage uses images hosted by Pexels and needs an internet connection.
+Certificates require an earned perfect quiz score and eligible Premium demo membership; buying or enabling a membership does not grant the achievement. Certificates are Atlas Learn-issued learning certificates, not accredited qualifications or official recognition. The PDF action opens the browser print dialog, where you can choose **Save as PDF**. QR images are requested from [QR Server](https://qrserver.com/) and verify only against local browser data; they are not portable or independently trustworthy credentials. The Premium graduation collage uses images hosted by Pexels and needs an internet connection.
 
-A production launch needs a secure backend and authentication provider for accounts and per-user progress; server-side membership entitlements and expiry checks integrated with a trusted payment provider for Atlas Plus; a server-side certificate registry and verification endpoint; and a consent-aware service for shared leaderboards and notifications. Keep the current browser-only membership provider confined to demo environments when integrating production services.
+Dashboard and analytics metrics come from saved quiz results. Elapsed learning time is tracked only for sessions started after that tracking was added. Topic completions require a completed topic-based Quiz Studio session with every question for that topic answered; older quizzes without curriculum metadata do not contribute topic progress. Free learners retain basic score and history reporting, while filtered subject/topic analytics are a Premium feature.
+
+A production launch needs a secure backend and authentication provider for accounts and per-user progress; server-side quiz quotas, membership entitlements and expiry checks integrated with a trusted payment provider for Atlas Plus; a server-side certificate registry and verification endpoint; and a consent-aware service for shared leaderboards and notifications. Keep the current browser-only membership provider confined to demo environments. Never use its local membership flag as payment verification.
 
 Google Fonts are loaded from Google Fonts when an internet connection is available. The app uses system fallbacks when they are unavailable.
 

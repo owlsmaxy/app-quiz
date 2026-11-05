@@ -90,11 +90,18 @@ const quizzes = [
 ];
 
 const navItems = [
-  ['home', 'Home', 'home'], ['explore', 'Explore quizzes', 'explore'], ['categories', 'Categories', 'categories'], ['learn', 'Learn', 'explore'], ['quiz-builder', 'Quiz studio', 'explore'],
+  ['home', 'Home', 'home'], ['explore', 'Explore quizzes', 'explore'], ['categories', 'Categories', 'categories'], ['learn', 'Learn', 'explore'], ['quiz-builder', 'Quiz studio', 'explore'], ['analytics', 'Analytics', 'leaderboard'],
   ['premium', 'Premium', 'premium'], ['plus', 'Atlas Plus', 'premium'], ['rewards', 'Rewards', 'rewards'], ['leaderboard', 'Leaderboard', 'leaderboard'],
   ['profile', 'My profile', 'profile'], ['settings', 'Settings', 'settings'], ['auth', 'Sign in / sign up', 'profile']
 ];
 const storageKey = 'atlas-learn-demo-v1';
+const membershipConfig = {
+  currency: 'USD',
+  prices: { monthly: 4.99, yearly: 39.99 },
+  freeMonthlyQuizLimit: 10,
+  freeQuizQuestionLimit: 5,
+  premiumQuizQuestionLimit: 20
+};
 let storageReadFailed = false;
 let membershipMigrationNeeded = false;
 const defaultState = {
@@ -112,7 +119,9 @@ const defaultState = {
   certificates: [],
   customQuestions: [],
   quizAttempts: [],
-  topicPerformance: {}
+  topicPerformance: {},
+  membershipUsage: { month: '', quizzesStarted: 0 },
+  topicCompletions: []
 };
 
 function loadState() {
@@ -130,12 +139,16 @@ function loadState() {
       certificates: Array.isArray(saved.certificates) ? saved.certificates : [],
       customQuestions: Array.isArray(saved.customQuestions) ? saved.customQuestions : [],
       quizAttempts: Array.isArray(saved.quizAttempts) ? saved.quizAttempts : [],
-      topicPerformance: saved.topicPerformance && typeof saved.topicPerformance === 'object' ? saved.topicPerformance : {}
+      topicPerformance: saved.topicPerformance && typeof saved.topicPerformance === 'object' ? saved.topicPerformance : {},
+      membershipUsage: saved.membershipUsage && typeof saved.membershipUsage === 'object'
+        ? saved.membershipUsage : structuredClone(defaultState.membershipUsage),
+      topicCompletions: Array.isArray(saved.topicCompletions) ? saved.topicCompletions : []
     };
     const validFonts = ['DM Sans', 'Inter', 'Poppins', 'Montserrat', 'Outfit', 'Roboto', 'Space Grotesk', 'Nunito', 'Nunito Sans'];
     const numberOrDefault = (value, fallback = 0) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : fallback;
     restored.profile.name = typeof restored.profile.name === 'string' ? restored.profile.name.slice(0, 40) : defaultState.profile.name;
     restored.profile.email = typeof restored.profile.email === 'string' ? restored.profile.email.slice(0, 120) : '';
+    restored.profile.membership = ['monthly', 'yearly'].includes(restored.profile.membership) ? restored.profile.membership : null;
     const savedEducation = saved.profile?.education && typeof saved.profile.education === 'object' ? saved.profile.education : {};
     restored.profile.education = { ...defaultState.profile.education, ...savedEducation };
     const education = restored.profile.education;
@@ -203,6 +216,10 @@ function loadState() {
     restored.stats.lastActiveDate = typeof restored.stats.lastActiveDate === 'string' ? restored.stats.lastActiveDate : '';
     restored.stats.activeDates = Array.isArray(restored.stats.activeDates) ? restored.stats.activeDates.filter(date => typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) : [];
     restored.stats.completedChallenges = Array.isArray(restored.stats.completedChallenges) ? restored.stats.completedChallenges.filter(id => typeof id === 'string') : [];
+    restored.membershipUsage = {
+      month: /^\d{4}-\d{2}$/.test(restored.membershipUsage.month) ? restored.membershipUsage.month : '',
+      quizzesStarted: numberOrDefault(restored.membershipUsage.quizzesStarted)
+    };
     restored.history = restored.history.filter(entry => entry && typeof entry === 'object' && typeof entry.title === 'string' && Number.isFinite(Date.parse(entry.date)))
       .map(entry => ({
         quizId: typeof entry.quizId === 'string' ? entry.quizId : '',
@@ -212,7 +229,10 @@ function loadState() {
         total: Math.max(1, numberOrDefault(entry.total, 1)),
         xp: numberOrDefault(entry.xp),
         premiumQuiz: Boolean(entry.premiumQuiz),
-        date: entry.date
+        date: entry.date,
+        durationSeconds: entry.durationSeconds !== null && entry.durationSeconds !== undefined && Number.isFinite(Number(entry.durationSeconds))
+          ? numberOrDefault(entry.durationSeconds) : null,
+        attemptId: typeof entry.attemptId === 'string' ? entry.attemptId : ''
       })).slice(0, 100);
     restored.certificates = restored.certificates.filter(certificate =>
       certificate && typeof certificate.id === 'string' && /^[A-Z0-9-]{8,40}$/.test(certificate.id) &&
@@ -223,6 +243,7 @@ function loadState() {
       id: certificate.id,
       quizId: certificate.quizId,
       title: certificate.title.slice(0, 100),
+      course: typeof certificate.course === 'string' ? certificate.course.slice(0, 160) : '',
       studentName: typeof certificate.studentName === 'string' ? certificate.studentName.slice(0, 40) : restored.profile.name,
       achievement: 'Perfect Score',
       level: typeof certificate.level === 'string' ? certificate.level.slice(0, 40) : 'Mastery',
@@ -241,6 +262,29 @@ function loadState() {
     restored.topicPerformance = Object.fromEntries(Object.entries(restored.topicPerformance)
       .filter(([key, entries]) => typeof key === 'string' && Array.isArray(entries))
       .map(([key, entries]) => [key, entries.filter(entry => entry && ['beginner', 'intermediate', 'advanced'].includes(entry.difficulty) && typeof entry.correct === 'boolean' && Number.isFinite(Date.parse(entry.date))).slice(-20)]));
+    const catalogSubjects = [...AtlasEducation.subjects, ...AtlasEducation.university.flatMap(faculty => faculty.programmes).flatMap(programme => programme.units)];
+    const topicCompletions = new Map();
+    for (const completion of restored.topicCompletions) {
+      const subject = catalogSubjects.find(item => item.id === completion?.subjectId);
+      if (!subject || !subject.topics.some(topic => topic.id === completion.topicId) ||
+        typeof completion.contextKey !== 'string' || typeof completion.gradeId !== 'string' ||
+        !Number.isFinite(Date.parse(completion.completedAt))) continue;
+      if (!topicCompletions.has(completion.contextKey)) {
+        topicCompletions.set(completion.contextKey, {
+          contextKey: completion.contextKey,
+          countryId: typeof completion.countryId === 'string' ? completion.countryId : '',
+          curriculumId: typeof completion.curriculumId === 'string' ? completion.curriculumId : '',
+          educationLevelId: typeof completion.educationLevelId === 'string' ? completion.educationLevelId : '',
+          gradeId: completion.gradeId,
+          subjectId: completion.subjectId,
+          topicId: completion.topicId,
+          combinationId: typeof completion.combinationId === 'string' ? completion.combinationId : '',
+          title: typeof completion.title === 'string' ? completion.title.slice(0, 100) : subject.name,
+          completedAt: completion.completedAt
+        });
+      }
+    }
+    restored.topicCompletions = [...topicCompletions.values()].slice(-1000);
     return restored;
   } catch (error) {
     console.error('Unable to read saved Atlas Learn demo data.', error);
@@ -266,11 +310,15 @@ let bankQuestionManagerOpen = false;
 let timerId = null;
 let selectedCategory = 'all';
 let searchQuery = '';
+let analyticsFilters = { levelId: 'all', subjectId: 'all', topicId: 'all', range: '30' };
 let leaderboardPeriod = 'weekly';
 let leaderboardCategory = 'all';
 let authMode = 'signin';
 let selectedPremiumPlan = state.profile.membership || 'monthly';
 let demoCheckoutOpen = false;
+let membershipGate = null;
+let membershipReturnPage = null;
+let membershipGateReturnFocus = null;
 let membershipExpiryTimer = null;
 let certificatePreviewId = null;
 let verificationId = null;
@@ -350,6 +398,107 @@ function membershipStatus() {
 function hasActivePremiumMembership() {
   return membershipStatus().isActive;
 }
+function currentMonthKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+function freeQuizAttemptsUsed() {
+  return state.membershipUsage.month === currentMonthKey() ? state.membershipUsage.quizzesStarted : 0;
+}
+function membershipAccess(feature) {
+  const isPremium = hasActivePremiumMembership();
+  if (feature === 'quizAttempts') {
+    const used = freeQuizAttemptsUsed();
+    return { allowed: isPremium || used < membershipConfig.freeMonthlyQuizLimit, used, limit: membershipConfig.freeMonthlyQuizLimit };
+  }
+  if (['premiumQuiz', 'advancedQuizStudio', 'fullQuestionBank', 'premiumCertificate', 'advancedAnalytics'].includes(feature)) {
+    return { allowed: isPremium };
+  }
+  throw new Error(`Unknown membership feature: ${feature}`);
+}
+function membershipGateMarkup(feature) {
+  const access = membershipAccess(feature);
+  const content = {
+    quizAttempts: {
+      title: 'You’ve reached this month’s Free quiz limit',
+      description: `Free includes ${membershipConfig.freeMonthlyQuizLimit} quiz starts each month. Your learning history and scores are still saved.`,
+      benefits: ['Unlimited quiz attempts with Premium', 'Keep all of your existing learning progress']
+    },
+    premiumQuiz: {
+      title: 'This quiz is part of Premium',
+      description: 'Keep exploring the free quiz collection, or unlock this member quiz with Premium.',
+      benefits: ['Access member-only quizzes', 'Explore advanced practice and Premium learning reports']
+    },
+    advancedQuizStudio: {
+      title: 'Unlock the full Quiz studio',
+      description: 'Free includes focused multiple-choice practice. Premium unlocks advanced quiz settings.',
+      benefits: ['Build sessions with up to 20 questions', 'Use all available question formats and difficulty levels', 'Create timed assessments']
+    },
+    fullQuestionBank: {
+      title: 'Unlock the full sample question bank',
+      description: 'Free practice includes a focused selection of multiple-choice questions.',
+      benefits: ['Use all available sample question formats', 'Add and manage your own local practice questions']
+    },
+    premiumCertificate: {
+      title: 'Your achievement is ready for Premium',
+      description: 'Certificates remain tied to achievements you earn through quiz results. Premium unlocks the printable certificate preview.',
+      benefits: ['Create a certificate after earning a Perfect Score', 'Keep your earned achievements if you return to Free']
+    },
+    advancedAnalytics: {
+      title: 'Unlock detailed learning analytics',
+      description: 'Your basic quiz scores and history stay available on Free. Premium adds subject and topic breakdowns with filters.',
+      benefits: ['Compare performance by education level and subject', 'Review topic-level accuracy and learning progress', 'Filter results by topic and date range']
+    }
+  }[feature];
+  if (!content) throw new Error(`Missing membership gate copy: ${feature}`);
+  const quota = feature === 'quizAttempts'
+    ? `<p class="membership-gate-quota">${access.used} of ${access.limit} Free quiz starts used this month.</p>` : '';
+  return `<div class="membership-gate-backdrop" data-membership-backdrop>
+    <section class="membership-gate-dialog" role="dialog" aria-modal="true" aria-labelledby="membership-gate-title" aria-describedby="membership-gate-description">
+      <button type="button" class="membership-gate-close" data-close-membership-gate aria-label="Continue with Free">×</button>
+      <span class="membership-gate-crown" aria-hidden="true">♛</span>
+      <div class="eyebrow">ATLAS LEARN · PREMIUM</div><h2 id="membership-gate-title">${content.title}</h2>
+      <p id="membership-gate-description">${content.description}</p>${quota}
+      <ul>${content.benefits.map(benefit => `<li><span aria-hidden="true">✓</span>${benefit}</li>`).join('')}</ul>
+      <div class="membership-gate-actions"><button type="button" class="primary-button gold-button" data-membership-upgrade>Explore Premium ${icons.arrow}</button>
+      <button type="button" class="secondary-button" data-close-membership-gate>Continue with Free</button></div>
+      <small>Demo mode only. No payment is collected or verified.</small>
+    </section>
+  </div>`;
+}
+function openMembershipGate(feature, returnPage = activePage) {
+  if (membershipAccess(feature).allowed) return true;
+  membershipGate = { feature, returnPage };
+  membershipReturnPage = returnPage === 'premium' ? null : returnPage;
+  membershipGateReturnFocus = document.activeElement;
+  const root = document.getElementById('membership-gate-root');
+  root.innerHTML = membershipGateMarkup(feature);
+  root.hidden = false;
+  root.querySelector('[data-close-membership-gate]')?.focus();
+  return false;
+}
+function closeMembershipGate() {
+  membershipGate = null;
+  membershipReturnPage = null;
+  const root = document.getElementById('membership-gate-root');
+  root.hidden = true;
+  root.innerHTML = '';
+  if (membershipGateReturnFocus?.isConnected) membershipGateReturnFocus.focus();
+  else main.focus({ preventScroll: true });
+  membershipGateReturnFocus = null;
+}
+function recordQuizStart() {
+  if (!openMembershipGate('quizAttempts')) return false;
+  if (hasActivePremiumMembership()) return true;
+  const previous = structuredClone(state.membershipUsage);
+  const month = currentMonthKey();
+  state.membershipUsage = {
+    month,
+    quizzesStarted: (previous.month === month ? previous.quizzesStarted : 0) + 1
+  };
+  if (persist()) return true;
+  state.membershipUsage = previous;
+  return false;
+}
 function scheduleMembershipExpiry() {
   if (membershipExpiryTimer) window.clearTimeout(membershipExpiryTimer);
   const membership = membershipStatus();
@@ -360,8 +509,8 @@ function scheduleMembershipExpiry() {
       scheduleMembershipExpiry();
       return;
     }
-    if (activeQuiz?.premium && quizSession && !quizSession.finished) {
-      finishQuiz();
+    if ((activeQuiz?.premium || activeQuiz?.membershipRequired) && quizSession && !quizSession.finished) {
+      finishQuiz(quizSession.kind === 'bank');
       return;
     }
     render();
@@ -369,7 +518,10 @@ function scheduleMembershipExpiry() {
   }, Math.min(remaining, 2147483000));
 }
 function premiumQuizAccessAllowed(quiz) {
-  return !quiz?.premium || hasActivePremiumMembership();
+  return !quiz?.premium || membershipAccess('premiumQuiz').allowed;
+}
+function quizAccessAllowed(quiz) {
+  return (!quiz?.premium && !quiz?.membershipRequired) || membershipAccess('premiumQuiz').allowed;
 }
 function formatMembershipDate(value) {
   return Number.isFinite(Date.parse(value))
@@ -437,6 +589,37 @@ function totalXpForPeriod(period) {
     return true;
   }).reduce((sum, entry) => sum + entry.xp, 0);
 }
+function consistentLearningAchievementDate() {
+  const days = [...new Set(state.stats.activeDates)].sort();
+  let streak = 0;
+  let previous = null;
+  for (const day of days) {
+    const date = new Date(`${day}T00:00:00`);
+    const gap = previous ? (date - previous) / 86400000 : 1;
+    streak = gap === 1 ? streak + 1 : 1;
+    if (streak >= 7) return `${day}T00:00:00`;
+    previous = date;
+  }
+  return null;
+}
+function subjectMasteryAchievements() {
+  const subjectAttempts = new Map();
+  for (const [key, entries] of Object.entries(state.topicPerformance)) {
+    const subjectId = key.split('|')[4];
+    if (!subjectId || subjectId === '*') continue;
+    subjectAttempts.set(subjectId, [...(subjectAttempts.get(subjectId) || []), ...entries.filter(entry => entry.answered !== false)]);
+  }
+  return [...subjectAttempts.entries()].flatMap(([subjectId, entries]) => {
+    const ordered = [...entries].sort((left, right) => Date.parse(left.date) - Date.parse(right.date));
+    for (let index = 4; index < ordered.length; index += 1) {
+      const sample = ordered.slice(0, index + 1);
+      if (sample.filter(entry => entry.correct).length / sample.length >= .8) {
+        return [{ subjectId, date: ordered[index].date }];
+      }
+    }
+    return [];
+  }).sort((left, right) => Date.parse(left.date) - Date.parse(right.date));
+}
 function levelInfo() {
   const level = Math.floor(state.stats.xp / 250) + 1;
   return { level, current: state.stats.xp % 250, next: 250 };
@@ -444,19 +627,29 @@ function levelInfo() {
 function achievements() {
   const history = state.history;
   const premiumHistory = premiumQuizHistory();
-  return [
-    { id: 'first', name: 'First Steps', description: 'Complete your first quiz.', icon: '🌱', earned: state.stats.quizzes >= 1 },
-    { id: 'perfect', name: 'Perfect Score', description: 'Get every question right in a quiz.', icon: '💎', earned: history.some(entry => entry.correct === entry.total) },
-    { id: 'math', name: 'Number Navigator', description: 'Complete a Mathematics quiz.', icon: '🔢', earned: history.some(entry => entry.category === 'math') },
-    { id: 'programmer', name: 'Code Explorer', description: 'Complete a Programming quiz.', icon: '💻', earned: history.some(entry => entry.category === 'code') },
-    { id: 'streak', name: 'Week of Wonder', description: 'Reach a 7-day learning streak.', icon: '🔥', earned: state.stats.streak >= 7 },
-    { id: 'champion', name: 'Quiz Champion', description: 'Complete 10 quizzes.', icon: '🏆', earned: state.stats.quizzes >= 10 },
-    { id: 'science', name: 'Curious Mind', description: 'Complete a Science quiz.', icon: '🧪', earned: history.some(entry => entry.category === 'science') },
-    { id: 'history', name: 'Time Traveler', description: 'Complete a History quiz.', icon: '⌛', earned: history.some(entry => entry.category === 'history') },
-    { id: 'plus-scholar', name: 'Atlas Plus Scholar', description: 'Complete an Atlas Plus quiz.', icon: '♛', premium: true, earned: premiumHistory.length >= 1 },
-    { id: 'plus-precision', name: 'Plus Precision', description: 'Earn a perfect score in an Atlas Plus quiz.', icon: '✦', premium: true, earned: premiumHistory.some(entry => entry.total > 0 && entry.correct === entry.total) },
-    { id: 'plus-power', name: 'Plus Power', description: 'Complete 5 Atlas Plus quizzes.', icon: '🏆', premium: true, earned: premiumHistory.length >= 5 }
+  const historyByDate = [...history].sort((left, right) => Date.parse(left.date) - Date.parse(right.date));
+  const firstQuiz = historyByDate[0]?.date || null;
+  const firstPerfect = historyByDate.find(entry => entry.total > 0 && entry.correct === entry.total)?.date || null;
+  const streakAchievement = consistentLearningAchievementDate();
+  const fiveQuizzes = historyByDate[4]?.date || null;
+  const tenTopics = [...state.topicCompletions].sort((left, right) => Date.parse(left.completedAt) - Date.parse(right.completedAt))[9]?.completedAt || null;
+  const mastery = subjectMasteryAchievements()[0]?.date || null;
+  const definitions = [
+    { id: 'first', name: 'First Quiz Completed', description: 'Complete your first quiz.', icon: '🌱', earnedAt: firstQuiz },
+    { id: 'perfect', name: 'First Perfect Score', description: 'Answer every question correctly in a quiz.', icon: '💎', earnedAt: firstPerfect },
+    { id: 'champion', name: 'Five Quizzes Completed', description: 'Complete five quizzes.', icon: '🏆', earnedAt: fiveQuizzes },
+    { id: 'topics', name: 'Ten Topics Completed', description: 'Complete quizzes covering ten distinct learning topics.', icon: '📚', earnedAt: tenTopics },
+    { id: 'streak', name: 'Consistent Learner', description: 'Learn on seven consecutive days.', icon: '🔥', earnedAt: streakAchievement },
+    { id: 'mastery', name: 'Subject Mastery', description: 'Score at least 80% across five or more questions in one subject.', icon: '🎯', earnedAt: mastery },
+    { id: 'math', name: 'Number Navigator', description: 'Complete a Mathematics quiz.', icon: '🔢', earnedAt: historyByDate.find(entry => entry.category === 'math')?.date || null },
+    { id: 'programmer', name: 'Code Explorer', description: 'Complete a Programming quiz.', icon: '💻', earnedAt: historyByDate.find(entry => entry.category === 'code')?.date || null },
+    { id: 'science', name: 'Curious Mind', description: 'Complete a Science quiz.', icon: '🧪', earnedAt: historyByDate.find(entry => entry.category === 'science')?.date || null },
+    { id: 'history', name: 'Time Traveler', description: 'Complete a History quiz.', icon: '⌛', earnedAt: historyByDate.find(entry => entry.category === 'history')?.date || null },
+    { id: 'plus-scholar', name: 'Atlas Plus Scholar', description: 'Complete an Atlas Plus quiz.', icon: '♛', premium: true, earnedAt: premiumHistory.length ? [...premiumHistory].sort((a, b) => Date.parse(a.date) - Date.parse(b.date))[0].date : null },
+    { id: 'plus-precision', name: 'Plus Precision', description: 'Earn a perfect score in an Atlas Plus quiz.', icon: '✦', premium: true, earnedAt: [...premiumHistory].filter(entry => entry.total > 0 && entry.correct === entry.total).sort((a, b) => Date.parse(a.date) - Date.parse(b.date))[0]?.date || null },
+    { id: 'plus-power', name: 'Plus Power', description: 'Complete five Atlas Plus quizzes.', icon: '🏆', premium: true, earnedAt: [...premiumHistory].sort((a, b) => Date.parse(a.date) - Date.parse(b.date))[4]?.date || null }
   ];
+  return definitions.map(item => ({ ...item, earned: Boolean(item.earnedAt) }));
 }
 function quizTitle(id) { return quizzes.find(quiz => quiz.id === id)?.title || 'Quiz'; }
 
@@ -475,10 +668,14 @@ function getOrCreateCertificate(entry) {
   if (!entry || entry.total <= 0 || entry.correct !== entry.total) return null;
   const existing = state.certificates.find(certificate => certificate.quizId === entry.quizId && certificate.completionDate === entry.date);
   if (existing) return existing;
+  const attempt = state.quizAttempts.find(item => item.id === entry.attemptId);
+  const subject = educationCatalogSubjects().find(item => item.id === attempt?.metadata?.subjectId);
+  const topic = subject?.topics.find(item => item.id === attempt?.metadata?.topicId);
   const certificate = {
     id: certificateId(),
     quizId: entry.quizId,
     title: entry.title,
+    course: [subject?.name, topic?.name].filter(Boolean).join(' · ') || entry.title,
     studentName: state.profile.name,
     achievement: 'Perfect Score',
     level: entry.correct === entry.total ? 'Mastery' : 'Completed',
@@ -501,11 +698,12 @@ function certificateMarkup(certificate, compact = false) {
       <h2>This certificate is proudly presented to</h2>
       <div class="certificate-student">${escapeHTML(certificate.studentName)}</div>
       <div class="certificate-name-rule"></div>
-      <p class="certificate-description">For demonstrating exceptional knowledge and earning a perfect score in</p>
+      <p class="certificate-description">For completing a learning activity and earning a perfect score in</p>
       <div class="certificate-course">${escapeHTML(certificate.title)}</div>
+      ${certificate.course && certificate.course !== certificate.title ? `<div class="certificate-course-context">${escapeHTML(certificate.course)}</div>` : ''}
       <div class="certificate-achievement">${escapeHTML(certificate.achievement)} <span>·</span> ${escapeHTML(certificate.level)}</div>
       <footer class="certificate-footer"><div class="certificate-date"><span>COMPLETION DATE</span><strong>${completionDate}</strong></div><div class="certificate-id"><span>CERTIFICATE ID</span><strong>${escapeHTML(certificate.id)}</strong><small>Verify with QR code</small></div><img class="certificate-qr" src="${qrUrl}" alt="QR code to verify certificate ${escapeHTML(certificate.id)}"></footer>
-      <div class="certificate-demo-note">Awarded for quiz achievement, not for purchasing a membership. Demo certificate — verification is limited to this browser profile.</div>
+      <div class="certificate-demo-note">Atlas Learn-issued learning certificate · Not official accreditation. Awarded for quiz achievement, not for purchasing a membership. Verification is limited to this browser profile.</div>
     </div>
   </article>`;
 }
@@ -528,14 +726,14 @@ function verifyCertificatePage() {
 function renderNav() {
   const nav = document.getElementById('nav-list');
   nav.innerHTML = navItems.map(([id, label, icon], index) =>
-    `${index === 5 ? '<div class="nav-separator"></div>' : ''}<a href="#${id}" class="nav-item ${activePage === id ? 'active' : ''}" data-page="${id}" ${activePage === id ? 'aria-current="page"' : ''}>${icons[icon]}<span>${label}</span></a>`
+    `${index === 6 ? '<div class="nav-separator"></div>' : ''}<a href="#${id}" class="nav-item ${activePage === id ? 'active' : ''}" data-page="${id}" ${activePage === id ? 'aria-current="page"' : ''}>${icons[icon]}<span>${label}</span></a>`
   ).join('');
 }
 function renderUser() {
   const user = state.profile.signedIn ? state.profile.name : 'Guest learner';
   const membershipLabel = hasActivePremiumMembership()
     ? 'Atlas Plus demo member'
-    : membershipStatus().isExpired ? 'Demo membership expired' : state.profile.signedIn ? 'Local demo profile' : 'Guest demo';
+    : membershipStatus().isExpired ? 'Free member · Premium demo expired' : 'Free member';
   document.getElementById('sidebar-user').innerHTML = `
     <span class="user-avatar">${escapeHTML(initials(user))}</span>
     <div class="sidebar-user-copy"><strong>${escapeHTML(user)}</strong><span>${membershipLabel}</span></div>
@@ -581,38 +779,86 @@ function dashboardPage() {
   const firstName = escapeHTML(state.profile.name.split(/\s+/)[0] || 'Learner');
   const recommendation = quizzes.find(quiz => !quiz.premium && !state.history.some(entry => entry.quizId === quiz.id)) || quizzes[0];
   const completedThisWeek = completedInCurrentWeek();
-  const achievement = achievements().find(item => !item.earned);
+  const earnedAchievements = achievements().filter(item => item.earned);
+  const nextAchievement = achievements().find(item => !item.earned);
+  const education = learningContextSummary();
+  const progress = currentGradeTopicProgress();
+  const latestTopic = [...state.topicCompletions].sort((left, right) => Date.parse(right.completedAt) - Date.parse(left.completedAt))[0];
+  const average = state.history.length
+    ? Math.round(state.history.reduce((total, entry) => total + entry.correct / entry.total * 100, 0) / state.history.length)
+    : null;
+  const elapsedSeconds = totalLearningSeconds();
+  const certificates = state.history.filter(entry => entry.total > 0 && entry.correct === entry.total);
+  const trend = activityTrend(state.history);
+  const trendHasActivity = trend.some(day => day.sessions);
+  const trendAverage = trend.filter(day => day.score !== null).reduce((sum, day, _, days) => sum + day.score / days.length, 0);
+  const bestTrendScore = trend.filter(day => day.score !== null).reduce((best, day) => Math.max(best, day.score), 0);
+  const displayTrend = trend.map(day => {
+    const height = day.score ?? 0;
+    return `<div class="learning-trend-day" title="${day.key}: ${day.sessions ? `${day.score}% average across ${day.sessions} quiz${day.sessions === 1 ? '' : 'zes'}` : 'No quizzes recorded'}">
+      <div class="learning-trend-bar-wrap"><span class="learning-trend-bar ${day.sessions ? '' : 'no-activity'}" style="height:${height}%"></span></div>
+      <span>${day.label}</span>${day.sessions ? `<small>${day.score}%</small>` : '<small>—</small>'}
+    </div>`;
+  }).join('');
+  const contextLine = education.label
+    ? `<strong>${escapeHTML(education.label)}</strong><span>${escapeHTML(education.pathway?.name || education.programme?.name || education.curriculum?.name || 'Learning path')}</span>`
+    : '<strong>Your learning path</strong><span>Choose an education level to personalize your progress.</span>';
+  const subjectProgress = progress?.subjects.length
+    ? progress.subjects.map(subject => {
+      const completed = progress.topics.filter(({ subject: current, topic }) =>
+        current.id === subject.id && state.topicCompletions.some(item =>
+          item.contextKey === completionContextKey(educationPreferences().countryId, educationPreferences().curriculumId,
+            educationPreferences().levelId, educationPreferences().gradeId, subject.id, topic.id))
+      ).length;
+      const percent = subject.topics.length ? Math.round(completed / subject.topics.length * 100) : 0;
+      return `<div class="dashboard-subject-progress"><div><strong>${escapeHTML(subject.name)}</strong><span>${completed} of ${subject.topics.length} topics</span></div><div class="dashboard-progress-track" role="progressbar" aria-label="${escapeHTML(subject.name)} topic progress" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100"><span style="width:${percent}%"></span></div></div>`;
+    }).join('')
+    : '<div class="analytics-empty compact"><strong>Your learning path starts here</strong><span>Select your level, grade or programme to see relevant subject progress.</span><button type="button" class="secondary-button" data-page="learn">Browse learning library</button></div>';
+  const topicContinue = latestTopic
+    ? `<div class="dashboard-continue"><span class="dashboard-continue-icon" aria-hidden="true">📖</span><div><strong>Continue ${escapeHTML(AtlasEducation.getById(AtlasEducation.grades, latestTopic.gradeId)?.name || 'learning')}</strong><span>${escapeHTML(latestTopic.title)} · ${formatDate(latestTopic.completedAt)}</span></div><button type="button" class="secondary-button" data-continue-topic="${escapeHTML(latestTopic.contextKey)}">Continue ${icons.arrow}</button></div>`
+    : `<div class="analytics-empty compact"><strong>No learning topics completed yet</strong><span>Finish a topic-based practice session and your progress will appear here.</span><button type="button" class="secondary-button" data-page="quiz-builder">Build a practice quiz</button></div>`;
   return `
     <section class="welcome-banner">
       <div class="welcome-copy">
         <div class="welcome-label"><span>✦</span> YOUR PERSONAL LEARNING SPACE</div>
         <h1>Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${firstName}.</h1>
-        <p>Every question is a chance to discover something new. Ready to make today count?</p>
-        <button type="button" class="primary-button" data-start-quiz="${recommendation.id}">Start today's quiz ${icons.arrow}</button>
+        <p>${education.label ? `Your learning journey in ${escapeHTML(education.label)} is taking shape.` : 'A clear view of your learning, progress and next steps starts here.'}</p>
+        <button type="button" class="primary-button" data-start-quiz="${recommendation.id}">Start ${escapeHTML(recommendation.title)} ${icons.arrow}</button>
       </div>
       <div class="banner-art" aria-hidden="true"><span class="orbit"></span><span class="float-token one">✦</span><span class="float-token two">✓</span><span class="float-token three">•</span><span class="book-illustration"><svg viewBox="0 0 48 48"><path d="M8 11c7-2 12-.5 16 3 4-3.5 9-5 16-3v24c-7-2-12-.5-16 3-4-3.5-9-5-16-3V11Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M24 14v24M13 18c3-.5 6 0 8 1.5M13 24c3-.5 6 0 8 1.5m14-7c-3-.5-6 0-8 1.5m8 4.5c-3-.5-6 0-8 1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span></div>
     </section>
-    <section class="stat-grid" aria-label="Your learning at a glance">
-      ${statCard('bolt', 'violet', 'Total experience', `${state.stats.xp} XP`, `Level ${levelInfo().level} learner`)}
-      ${statCard('trophy', 'coral', 'Quizzes completed', state.stats.quizzes, state.stats.quizzes ? `${state.stats.correct} correct answers` : 'Your first quiz awaits')}
-      ${statCard('explore', 'mint', 'Learning streak', `${state.stats.streak} ${state.stats.streak === 1 ? 'day' : 'days'}`, 'A little practice adds up')}
-      ${statCard('rewards', 'blue', 'Achievement badges', `${achievements().filter(item => item.earned).length} / ${achievements().length}`, 'Earned through real quizzes')}
+    <section class="dashboard-learning-context" aria-label="Current learning path">
+      <span class="dashboard-context-icon" aria-hidden="true">⌖</span><div><div class="eyebrow">YOUR LEARNING PATH</div>${contextLine}</div>
+      <button type="button" class="text-button" data-page="settings">Update preferences ${icons.arrow}</button>
     </section>
-    <section class="dashboard-grid">
-      <div class="section-card">
-        <div class="section-heading"><div><h2>Picked for your next session</h2><p>A good place to keep your momentum.</p></div><button class="text-button" type="button" data-page="explore">Explore all ${icons.arrow}</button></div>
-        <div class="quiz-list">${[recommendation, ...quizzes.filter(quiz => !quiz.premium && quiz.id !== recommendation.id).slice(0, 2)].map(quizListRow).join('')}</div>
-      </div>
-      <div class="section-card streak-card">
-        <div class="streak-top"><div><div class="eyebrow" style="color:#c28f3b">YOUR STREAK</div><div class="streak-count">${state.stats.streak} <span style="font-size:1rem">days</span></div><p>Keep showing up for yourself.</p></div><span class="streak-flame" aria-hidden="true">🔥</span></div>
-        <div class="week-days">${weekStrip()}</div><div class="goal-progress"><span style="width:${Math.min(100, completedThisWeek / 3 * 100)}%"></span></div>
-        <div class="challenge-caption"><span>Weekly goal</span><span>${Math.min(completedThisWeek, 3)} / 3 quizzes</span></div>
+    <section class="stat-grid dashboard-stat-grid" aria-label="Learning overview">
+      ${statCard('trophy', 'coral', 'Quizzes attempted', state.stats.quizzes, `${state.history.length} score${state.history.length === 1 ? '' : 's'} in recent history`)}
+      ${statCard('check', 'mint', 'Average score', average === null ? '—' : `${average}%`, average === null ? 'Complete a quiz to get started' : `Across ${state.history.length} recorded quizzes`)}
+      ${statCard('clock', 'blue', 'Learning time', elapsedSeconds ? formatLearningDuration(elapsedSeconds) : '—', elapsedSeconds ? 'Time in completed quiz sessions' : 'Tracked from your next quiz')}
+      ${statCard('explore', 'violet', 'Topics completed', state.topicCompletions.length, 'Unique topics from completed sessions')}
+      ${statCard('bolt', 'coral', 'Current streak', `${currentLearningStreak()} ${currentLearningStreak() === 1 ? 'day' : 'days'}`, currentLearningStreak() ? 'Based on recorded daily activity' : 'Complete a quiz today to begin')}
+    </section>
+    <section class="dashboard-grid dashboard-analytics-grid">
+      <article class="section-card dashboard-trend-card"><div class="section-heading"><div><h2>Performance this week</h2><p>${trendHasActivity ? `Average ${Math.round(trendAverage)}% · Best day ${bestTrendScore}%` : 'Quiz scores will appear after your first session.'}</p></div><button class="text-button" type="button" data-page="analytics">View analytics ${icons.arrow}</button></div>
+        ${trendHasActivity ? `<div class="learning-trend-chart" role="img" aria-label="Daily quiz scores over the last seven days">${displayTrend}</div>${state.history.length < 2 ? '<p class="analytics-footnote">Complete another quiz to start seeing a performance trend.</p>' : ''}` : '<div class="analytics-empty compact"><span>No quiz activity recorded in the last seven days.</span><button type="button" class="secondary-button" data-start-quiz="${recommendation.id}">Start a quiz ${icons.arrow}</button></div>'}
+      </article>
+      <article class="section-card dashboard-progress-card"><div class="section-heading"><div><h2>Subject progress</h2><p>${progress ? `${progress.completedCount} of ${progress.topics.length} topics completed in ${escapeHTML(education.grade?.name || education.programme?.name || 'your selected grade')}` : 'Progress follows your selected education path.'}</p></div><button type="button" class="text-button" data-page="learn">Explore learning ${icons.arrow}</button></div>
+        ${subjectProgress}${progress?.completedCount ? `<div class="dashboard-overall-progress"><span>Grade or programme progress</span><strong>${progress.completedCount}/${progress.topics.length} topics · ${progress.percent}%</strong><div class="dashboard-progress-track" role="progressbar" aria-label="Overall topic completion" aria-valuenow="${progress.percent}" aria-valuemin="0" aria-valuemax="100"><span style="width:${progress.percent}%"></span></div></div>` : ''}
+      </article>
+    </section>
+    <section class="section-card dashboard-continue-card"><div class="section-heading"><div><h2>Continue learning</h2><p>Pick up from your most recently completed topic.</p></div></div>${topicContinue}</section>
+    <section class="bottom-grid dashboard-bottom-grid">
+      <div class="section-card"><div class="section-heading"><div><h2>Recent activity</h2><p>Your latest completed learning sessions.</p></div><button class="text-button" type="button" data-page="analytics">Full history ${icons.arrow}</button></div>${historyMarkup(5)}</div>
+      <div class="section-card"><div class="section-heading"><div><h2>Achievements</h2><p>${earnedAchievements.length} earned · based on your activity</p></div><button class="text-button" type="button" data-page="rewards">View all ${icons.arrow}</button></div>
+        ${earnedAchievements.length ? `<div class="dashboard-achievement-row">${earnedAchievements.slice(0, 3).map(item => `<span title="${escapeHTML(item.name)}">${item.icon}</span>`).join('')}<div><strong>${escapeHTML(earnedAchievements[0].name)}</strong><small>Unlocked ${formatDate(earnedAchievements[0].earnedAt)}</small></div></div>` : `<div class="analytics-empty compact"><span>${escapeHTML(nextAchievement?.description || 'Complete a learning activity to earn an achievement.')}</span></div>`}
+        ${nextAchievement ? `<div class="next-achievement"><span class="achievement-lock">${nextAchievement.icon}</span><div><strong>Next: ${escapeHTML(nextAchievement.name)}</strong><span>${escapeHTML(nextAchievement.description)}</span></div></div>` : ''}
       </div>
     </section>
-    <section class="bottom-grid">
-      <div class="section-card"><div class="section-heading"><div><h2>Recent activity</h2><p>Your latest learning moments.</p></div><button class="text-button" type="button" data-page="profile">View profile ${icons.arrow}</button></div>${historyMarkup(4)}</div>
-      <div class="section-card"><div class="section-heading"><div><h2>On the horizon</h2><p>One small goal, one satisfying unlock.</p></div></div>${achievement ? `<div class="next-achievement"><span class="achievement-lock">${achievement.icon}</span><div><strong>${achievement.name}</strong><span>${achievement.description}</span></div></div>` : '<div class="next-achievement"><span class="achievement-lock">🏆</span><div><strong>All badges earned!</strong><span>What a learning journey.</span></div></div>'}<button type="button" class="text-button" style="margin-top:11px" data-page="rewards">See all rewards ${icons.arrow}</button></div>
-    </section>`;
+    ${certificates.length ? `<section class="dashboard-certificate-card"><div class="dashboard-certificate-icon" aria-hidden="true">🎓</div><div><div class="eyebrow">PERFECT SCORE ACHIEVEMENT</div><h2>Your learning milestone is certificate-eligible</h2><p>${certificates.length} perfect-score quiz${certificates.length === 1 ? '' : 'zes'} recorded. Certificates are issued by Atlas Learn and are not official accreditation.</p></div><button type="button" class="${hasActivePremiumMembership() ? 'primary-button' : 'secondary-button'}" ${hasActivePremiumMembership() ? 'data-page="premium"' : 'data-membership-feature="premiumCertificate"'}>${hasActivePremiumMembership() ? 'Open certificates' : 'Explore certificate benefits'} ${icons.arrow}</button></section>` : ''}
+    <section class="dashboard-recommendation"><div><div class="eyebrow">RECOMMENDED NEXT</div><h2>${escapeHTML(recommendation.title)}</h2><p>${escapeHTML(recommendation.description)}</p></div><button type="button" class="secondary-button" data-start-quiz="${recommendation.id}">Start this quiz ${icons.arrow}</button></section>
+    ${hasActivePremiumMembership() ? `<button type="button" class="dashboard-analytics-upgrade" data-page="analytics">Open your Premium learning report ${icons.arrow}</button>` : `<button type="button" class="dashboard-analytics-upgrade" data-membership-feature="advancedAnalytics">Unlock detailed Premium analytics ${icons.arrow}</button>`}
+    <div class="dashboard-weekly-activity"><span>This week</span><strong>${completedThisWeek} quiz${completedThisWeek === 1 ? '' : 'zes'} completed</strong><div class="goal-progress"><span style="width:${Math.min(100, completedThisWeek / 3 * 100)}%"></span></div><small>${Math.min(completedThisWeek, 3)} / 3 toward your weekly goal</small></div>
+  `;
 }
 
 function quizCard(quiz) {
@@ -621,7 +867,7 @@ function quizCard(quiz) {
   return `<article class="quiz-card">${`<div class="quiz-card-top">${quizMark(quiz.category)}<span class="difficulty ${quiz.difficulty.toLowerCase()}">${quiz.difficulty}</span></div>`}
     <h3>${escapeHTML(quiz.title)}</h3><p>${escapeHTML(quiz.description)}</p>
     <div class="quiz-card-meta"><span>${icons.clock}${quiz.duration} min</span><span>${quiz.questions.length} questions</span><span>${escapeHTML(category?.name || '')}</span></div>
-    ${isLocked ? `<div class="quiz-lock-preview"><span>${icons.lock} ATLAS PLUS PREVIEW</span><p>${escapeHTML(quiz.description)}</p><button type="button" class="lock-note" data-page="plus">Explore Atlas Plus ${icons.arrow}</button></div>` : `<button type="button" class="primary-button" data-start-quiz="${quiz.id}">Start quiz ${icons.arrow}</button>`}</article>`;
+    ${isLocked ? `<div class="quiz-lock-preview"><span>${icons.lock} PREMIUM QUIZ</span><p>${escapeHTML(quiz.description)}</p><button type="button" class="lock-note" data-membership-feature="premiumQuiz">See Premium benefits ${icons.arrow}</button></div>` : `<button type="button" class="primary-button" data-start-quiz="${quiz.id}">Start quiz ${icons.arrow}</button>`}</article>`;
 }
 function explorePage() {
   const filtered = quizzes.filter(quiz => {
@@ -705,6 +951,196 @@ function educationCurrentItems() {
 }
 function educationSelectedItem() {
   return educationCurrentItems().find(item => item.id === educationPreferences().subjectId) || null;
+}
+function educationCatalogSubjects() {
+  return [...AtlasEducation.subjects, ...AtlasEducation.university.flatMap(faculty => faculty.programmes).flatMap(programme => programme.units)];
+}
+function learningContextSummary() {
+  const preference = educationPreferences();
+  const level = AtlasEducation.getById(AtlasEducation.levels, preference.levelId);
+  const curriculum = AtlasEducation.getById(AtlasEducation.curricula, preference.curriculumId);
+  const grade = AtlasEducation.getById(AtlasEducation.grades, preference.gradeId);
+  const programme = AtlasEducation.getProgramme(preference.programmeId);
+  const faculty = AtlasEducation.faculties.find(item => item.id === preference.facultyId);
+  const pathway = AtlasEducation.pathways.find(item => item.id === preference.pathwayId);
+  const combination = pathway?.combinations.find(item => item.id === preference.combinationId);
+  return {
+    level,
+    curriculum,
+    grade,
+    programme,
+    faculty,
+    pathway,
+    combination,
+    label: [
+      level?.name,
+      curriculum?.name,
+      level?.id === 'university' ? programme?.name : grade?.name,
+      level?.id === 'university' ? faculty?.name : pathway?.name,
+      combination?.name
+    ].filter(Boolean).join(' · ')
+  };
+}
+function currentLearningStreak() {
+  const today = todayKey();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (![today, todayKey(yesterday)].includes(state.stats.lastActiveDate)) return 0;
+  return state.stats.streak;
+}
+function totalLearningSeconds(entries = state.history) {
+  return entries.reduce((total, entry) =>
+    total + (Number.isFinite(entry.durationSeconds) && entry.durationSeconds > 0 ? entry.durationSeconds : 0), 0);
+}
+function formatLearningDuration(seconds) {
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours} hr ${remainder} min` : `${hours} hr`;
+}
+function recordTopicCompletions(quiz, questions, answers, completedAt) {
+  const metadata = quiz?.metadata;
+  if (!metadata?.educationLevelId || !metadata?.gradeId) return;
+  const availableSubjects = educationCatalogSubjects();
+  const completions = new Map(state.topicCompletions.map(item => [item.contextKey, item]));
+  const topicQuestions = new Map();
+  questions.forEach((question, index) => {
+    if (!question.subjectId || !question.topicId || !bankResponseComplete(answers[index]?.response)) return;
+    const key = `${question.subjectId}|${question.topicId}`;
+    topicQuestions.set(key, (topicQuestions.get(key) || 0) + 1);
+  });
+  for (const [topicKey, answeredCount] of topicQuestions) {
+    const [subjectId, topicId] = topicKey.split('|');
+    const questionCount = questions.filter(question => question.subjectId === subjectId && question.topicId === topicId).length;
+    if (answeredCount !== questionCount) continue;
+    const subject = availableSubjects.find(item => item.id === subjectId);
+    if (!subject || !subject.topics.some(topic => topic.id === topicId)) continue;
+    const contextKey = [
+      metadata.countryId, metadata.curriculumId, metadata.educationLevelId, metadata.gradeId,
+      subjectId, topicId
+    ].join('|');
+    if (completions.has(contextKey)) continue;
+    completions.set(contextKey, {
+      contextKey,
+      countryId: metadata.countryId,
+      curriculumId: metadata.curriculumId,
+      educationLevelId: metadata.educationLevelId,
+      gradeId: metadata.gradeId,
+      subjectId,
+      topicId,
+      combinationId: metadata.combinationId || '',
+      title: quiz.title,
+      completedAt
+    });
+  }
+  state.topicCompletions = [...completions.values()].slice(-1000);
+}
+function completionContextKey(countryId, curriculumId, levelId, gradeId, subjectId, topicId) {
+  return [countryId, curriculumId, levelId, gradeId, subjectId, topicId].join('|');
+}
+function currentGradeTopicProgress() {
+  const preference = educationPreferences();
+  if (!preference.levelId || !preference.gradeId) return null;
+  const subjects = educationCurrentItems();
+  const topics = subjects.flatMap(subject => subject.topics.map(topic => ({ subject, topic })));
+  if (!topics.length) return null;
+  const completed = new Set(state.topicCompletions.map(item => item.contextKey));
+  const completedCount = topics.filter(({ subject, topic }) =>
+    completed.has(completionContextKey(preference.countryId, preference.curriculumId, preference.levelId, preference.gradeId, subject.id, topic.id))
+  ).length;
+  return { subjects, topics, completedCount, percent: Math.round(completedCount / topics.length * 100) };
+}
+function analyticsRecords() {
+  const attempts = new Map(state.quizAttempts.map(attempt => [attempt.id, attempt]));
+  const subjects = educationCatalogSubjects();
+  return state.history.map(entry => {
+    const attempt = attempts.get(entry.attemptId);
+    const metadata = attempt?.metadata || {};
+    const subject = subjects.find(item => item.id === metadata.subjectId);
+    const topic = subject?.topics.find(item => item.id === metadata.topicId);
+    const category = categoryFor(entry.category);
+    return {
+      ...entry,
+      attempt,
+      levelId: metadata.educationLevelId || '',
+      subjectId: metadata.subjectId || entry.category || '',
+      subjectName: subject?.name || category?.name || 'Other quiz',
+      topicId: metadata.topicId || '',
+      topicName: topic?.name || '',
+      gradeId: metadata.gradeId || ''
+    };
+  });
+}
+function analyticsDateFilter(records, range) {
+  if (range === 'all') return records;
+  const days = Number(range);
+  if (!Number.isFinite(days) || days <= 0) return records;
+  const cutoff = Date.now() - days * 86400000;
+  return records.filter(entry => Date.parse(entry.date) >= cutoff);
+}
+function filteredAnalyticsRecords(filters = analyticsFilters) {
+  return analyticsDateFilter(analyticsRecords(), filters.range).filter(entry =>
+    (filters.levelId === 'all' || entry.levelId === filters.levelId) &&
+    (filters.subjectId === 'all' || entry.subjectId === filters.subjectId) &&
+    (filters.topicId === 'all' || entry.topicId === filters.topicId ||
+      entry.attempt?.questions?.some(question => question.topicId === filters.topicId))
+  );
+}
+function analyticsSubjectRows(records) {
+  const groups = new Map();
+  for (const entry of records) {
+    const id = entry.subjectId || entry.category || 'other';
+    const row = groups.get(id) || { id, name: entry.subjectName, correct: 0, total: 0, attempts: 0 };
+    row.correct += entry.correct;
+    row.total += entry.total;
+    row.attempts += 1;
+    groups.set(id, row);
+  }
+  return [...groups.values()].map(row => ({ ...row, score: row.total ? Math.round(row.correct / row.total * 100) : null }))
+    .sort((left, right) => right.score - left.score || right.attempts - left.attempts);
+}
+function analyticsTopicRows(range, filters) {
+  const subjects = educationCatalogSubjects();
+  const groups = new Map();
+  for (const [key, entries] of Object.entries(state.topicPerformance)) {
+    const [countryId, curriculumId, levelId, gradeId, subjectId, topicId] = key.split('|');
+    if (!topicId || topicId === '*') continue;
+    if (filters.levelId !== 'all' && levelId !== filters.levelId) continue;
+    if (filters.subjectId !== 'all' && subjectId !== filters.subjectId) continue;
+    if (filters.topicId !== 'all' && topicId !== filters.topicId) continue;
+    const subject = subjects.find(item => item.id === subjectId);
+    const topic = subject?.topics.find(item => item.id === topicId);
+    if (!subject || !topic) continue;
+    const keyId = `${levelId}|${gradeId}|${subjectId}|${topicId}`;
+    const group = groups.get(keyId) || { key: keyId, countryId, curriculumId, levelId, gradeId, subjectId, topicId, subject: subject.name, topic: topic.name, correct: 0, total: 0 };
+    const datedEntries = analyticsDateFilter(entries, range).filter(entry => entry.answered !== false);
+    group.correct += datedEntries.filter(entry => entry.correct).length;
+    group.total += datedEntries.length;
+    groups.set(keyId, group);
+  }
+  return [...groups.values()].filter(item => item.total)
+    .map(item => ({ ...item, score: Math.round(item.correct / item.total * 100) }))
+    .sort((left, right) => right.total - left.total || right.score - left.score);
+}
+function activityTrend(records, dayCount = 7) {
+  const days = [];
+  for (let offset = dayCount - 1; offset >= 0; offset -= 1) {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - offset);
+    const key = todayKey(date);
+    const sessions = records.filter(entry => todayKey(new Date(entry.date)) === key);
+    const total = sessions.reduce((sum, entry) => sum + entry.total, 0);
+    const correct = sessions.reduce((sum, entry) => sum + entry.correct, 0);
+    days.push({
+      key,
+      label: date.toLocaleDateString(undefined, { weekday: 'short' }),
+      sessions: sessions.length,
+      score: total ? Math.round(correct / total * 100) : null
+    });
+  }
+  return days;
 }
 function educationBreadcrumbs() {
   const preference = educationPreferences();
@@ -1100,6 +1536,29 @@ function defaultBuilderSubject(subjects, gradeId) {
     subjects.some(subject => subject.id === question.subjectId));
   return subjects.find(subject => subject.id === availableSubject?.subjectId) || subjects[0];
 }
+function builderQuestionLimit() {
+  return hasActivePremiumMembership() ? membershipConfig.premiumQuizQuestionLimit : membershipConfig.freeQuizQuestionLimit;
+}
+function builderConfigurationRequiresPremium(draft = quizBuilderDraft) {
+  return Boolean(draft && (
+    Number(draft.questionCount) > membershipConfig.freeQuizQuestionLimit ||
+    !['beginner', 'intermediate'].includes(draft.difficulty) ||
+    draft.questionType !== 'multiple-choice' ||
+    Number(draft.timeLimit) > 0 ||
+    draft.mode !== 'practice'
+  ));
+}
+function hasPremiumBuilderSettings(draft = quizBuilderDraft) {
+  return !hasActivePremiumMembership() && builderConfigurationRequiresPremium(draft);
+}
+function normalizeFreeBuilderDraft() {
+  if (hasActivePremiumMembership()) return;
+  quizBuilderDraft.questionCount = Math.min(membershipConfig.freeQuizQuestionLimit, Math.max(1, Number(quizBuilderDraft.questionCount) || 1));
+  if (!['beginner', 'intermediate'].includes(quizBuilderDraft.difficulty)) quizBuilderDraft.difficulty = 'beginner';
+  quizBuilderDraft.questionType = 'multiple-choice';
+  quizBuilderDraft.timeLimit = 0;
+  quizBuilderDraft.mode = 'practice';
+}
 function initializeQuizBuilder() {
   if (quizBuilderDraft) return;
   const preference = educationPreferences();
@@ -1116,7 +1575,7 @@ function initializeQuizBuilder() {
     levelId, curriculumId, gradeId,
     subjectId: subjects.some(item => item.id === preference.subjectId) ? preference.subjectId : (defaultSubject?.id || ''),
     topicId: '',
-    difficulty: 'beginner', questionType: 'all', questionCount: 5, timeLimit: 0,
+    difficulty: 'beginner', questionType: hasActivePremiumMembership() ? 'all' : 'multiple-choice', questionCount: 5, timeLimit: 0,
     mode: 'practice', immediateFeedback: true, combinationId: preference.combinationId || '', preview: false
   };
 }
@@ -1132,7 +1591,8 @@ function builderQuestionPool() {
     topicId: draft.topicId,
     difficulty: draft.difficulty === 'adaptive' ? undefined : draft.difficulty,
     type: draft.questionType === 'all' ? undefined : draft.questionType
-  }));
+  })).filter(item => hasActivePremiumMembership() ||
+    (item.type === 'multiple-choice' && ['beginner', 'intermediate'].includes(item.difficulty)));
 }
 function adaptiveDifficulty(pool, draft) {
   if (draft.difficulty !== 'adaptive') return draft.difficulty;
@@ -1184,14 +1644,17 @@ function builderSearchResults(query) {
 }
 function quizBuilderPage() {
   initializeQuizBuilder();
+  normalizeFreeBuilderDraft();
   const draft = quizBuilderDraft;
+  const isPremium = hasActivePremiumMembership();
+  const questionLimit = builderQuestionLimit();
   const curricula = AtlasEducation.getCurricula(draft.levelId);
   const grades = AtlasEducation.getGrades(draft.levelId, draft.curriculumId);
   const subjects = getBuilderSubjects(draft.levelId, draft.curriculumId, draft.gradeId);
   const topics = getBuilderTopics(draft.subjectId, draft.levelId, draft.curriculumId, draft.gradeId);
   const pool = builderQuestionPool();
   const matchingCount = pool.length;
-  const count = Math.min(Number(draft.questionCount) || 1, 20);
+  const count = Math.min(Number(draft.questionCount) || 1, questionLimit);
   const selectedDifficulty = adaptiveDifficulty(pool, draft);
   const eligiblePool = pool.filter(item => item.difficulty === selectedDifficulty);
   const requestedQuestions = draft.preview && quizBuilderPreviewQuestions.length
@@ -1212,12 +1675,13 @@ function quizBuilderPage() {
           ${builderSelect('gradeId', draft.levelId === 'university' ? 'Academic year' : 'Grade', grades, draft.gradeId, !grades.length)}
           ${builderSelect('subjectId', draft.levelId === 'university' ? 'Unit' : 'Subject', subjects, draft.subjectId, !subjects.length)}
           ${builderSelect('topicId', 'Topic', [{ id: '', name: 'All topics' }, ...topics], draft.topicId, !topics.length)}
-          ${builderSelect('difficulty', 'Difficulty', [{ id: 'beginner', name: 'Beginner' }, { id: 'intermediate', name: 'Intermediate' }, { id: 'advanced', name: 'Advanced' }, { id: 'adaptive', name: 'Adaptive practice' }], draft.difficulty)}
-          ${builderSelect('questionType', 'Question format', [{ id: 'all', name: 'All available formats' }, ...AtlasQuestionBank.questionTypes.map(id => ({ id, name: ({ 'multiple-choice': 'Multiple choice', 'true-false': 'True or False', 'multiple-answer': 'Multiple answer', 'short-answer': 'Short answer', numerical: 'Numerical' })[id] }))], draft.questionType)}
-          <label class="field"><span>Number of questions</span><input type="number" min="1" max="20" value="${count}" data-builder-number="questionCount"></label>
-          <label class="field"><span>Time limit</span><select data-builder-select="timeLimit"><option value="0" ${draft.timeLimit === 0 ? 'selected' : ''}>No timer</option>${[5, 10, 15, 20, 30].map(minutes => `<option value="${minutes}" ${Number(draft.timeLimit) === minutes ? 'selected' : ''}>${minutes} minutes</option>`).join('')}</select></label>
-          ${builderSelect('mode', 'Session mode', [{ id: 'practice', name: 'Practice' }, { id: 'assessment', name: 'Assessment' }], draft.mode)}
+          ${builderSelect('difficulty', 'Difficulty', [{ id: 'beginner', name: 'Beginner' }, { id: 'intermediate', name: 'Intermediate' }, ...(isPremium ? [{ id: 'advanced', name: 'Advanced' }, { id: 'adaptive', name: 'Adaptive practice' }] : [])], draft.difficulty)}
+          ${builderSelect('questionType', 'Question format', isPremium ? [{ id: 'all', name: 'All available formats' }, ...AtlasQuestionBank.questionTypes.map(id => ({ id, name: ({ 'multiple-choice': 'Multiple choice', 'true-false': 'True or False', 'multiple-answer': 'Multiple answer', 'short-answer': 'Short answer', numerical: 'Numerical' })[id] }))] : [{ id: 'multiple-choice', name: 'Multiple choice' }], draft.questionType)}
+          <label class="field"><span>Number of questions</span><input type="number" min="1" max="${questionLimit}" value="${count}" data-builder-number="questionCount"></label>
+          <label class="field"><span>Time limit</span><select data-builder-select="timeLimit"><option value="0" ${draft.timeLimit === 0 ? 'selected' : ''}>No timer</option>${isPremium ? [5, 10, 15, 20, 30].map(minutes => `<option value="${minutes}" ${Number(draft.timeLimit) === minutes ? 'selected' : ''}>${minutes} minutes</option>`).join('') : ''}</select></label>
+          ${builderSelect('mode', 'Session mode', isPremium ? [{ id: 'practice', name: 'Practice' }, { id: 'assessment', name: 'Assessment' }] : [{ id: 'practice', name: 'Practice' }], draft.mode)}
         </div>
+        ${!isPremium ? `<div class="membership-builder-lock"><div><strong>Free practice is ready</strong><span>Build up to ${membershipConfig.freeQuizQuestionLimit} multiple-choice questions. Premium adds more formats, difficulty levels, timed assessments and up to ${membershipConfig.premiumQuizQuestionLimit} questions.</span></div><button type="button" class="text-button" data-membership-feature="advancedQuizStudio">Explore Premium ${icons.arrow}</button></div>` : ''}
         ${draft.mode === 'practice' ? `<label class="quiz-feedback-toggle"><input type="checkbox" data-builder-feedback ${draft.immediateFeedback ? 'checked' : ''}> Show feedback after each practice answer</label>` : '<p class="form-footnote">Assessment feedback and explanations appear after you submit.</p>'}
         <div class="quiz-bank-availability ${eligiblePool.length ? '' : 'is-empty'}" role="status">${escapeHTML(availableLevelQuestions)}${draft.difficulty === 'adaptive' ? ` · Adaptive difficulty: ${escapeHTML(selectedDifficulty)}` : ''}</div>
         <div class="form-actions"><button type="button" class="secondary-button" data-preview-generated>Preview quiz</button><button type="button" class="primary-button" data-start-generated ${eligiblePool.length && draft.preview ? '' : 'disabled'}>Start ${draft.mode === 'assessment' ? 'assessment' : 'practice'} ${icons.arrow}</button></div>
@@ -1227,10 +1691,10 @@ function quizBuilderPage() {
         ${quizBuilderSearch.trim() ? queryResults.length ? `<div class="quiz-search-results">${queryResults.map(result => `<article class="quiz-search-result"><span class="eyebrow">${escapeHTML(result.grade.name)} · ${escapeHTML(result.subject.name)}</span><strong>${escapeHTML(result.topic.name)}</strong><p>${escapeHTML(result.topic.description)}</p><small>${result.questions.length} matching sample question${result.questions.length === 1 ? '' : 's'}</small><button type="button" class="text-button" data-search-result="${escapeHTML(result.grade.id)}|${escapeHTML(result.subject.id)}|${escapeHTML(result.topic.id)}">Use this topic ${icons.arrow}</button></article>`).join('')}</div>` : '<div class="empty-state"><p>No matching sample subjects or topics. Try another search.</p></div>' : '<div class="quiz-search-hint">Results are drawn from the sample learning catalog and question bank.</div>'}
       </aside>
     </div>
-    <details class="question-manager" ${bankQuestionManagerOpen || bankQuestionEditId ? 'open' : ''}><summary>Manage question bank</summary><p>Add or edit local sample questions, or remove your custom entries. Built-in questions cannot be overwritten. Use a pipe (|) to enter multiple accepted short answers.</p>
+    ${isPremium ? `<details class="question-manager" ${bankQuestionManagerOpen || bankQuestionEditId ? 'open' : ''}><summary>Manage question bank</summary><p>Add or edit local sample questions, or remove your custom entries. Built-in questions cannot be overwritten. Use a pipe (|) to enter multiple accepted short answers.</p>
       ${questionBankManagerForm()}
       <div class="question-manager-list">${state.customQuestions.length ? state.customQuestions.map(item => `<article class="question-manager-row"><div><strong>${escapeHTML(item.prompt)}</strong><span>${escapeHTML(item.gradeId)} · ${escapeHTML(item.subjectId)} · ${escapeHTML(item.topicId)} · ${escapeHTML(item.difficulty)} · ${escapeHTML(item.type)}</span></div><div><button type="button" class="text-button" data-edit-bank-question="${escapeHTML(item.id)}">Edit</button><button type="button" class="text-button danger-text" data-delete-bank-question="${escapeHTML(item.id)}">Remove</button></div></article>`).join('') : '<p>No custom questions have been added.</p>'}</div>
-    </details>
+    </details>` : `<section class="question-manager-locked"><strong>Want to build your own practice bank?</strong><p>Premium includes the full sample question bank and local question management.</p><button type="button" class="secondary-button" data-membership-feature="fullQuestionBank">Explore Premium ${icons.arrow}</button></section>`}
     ${educationContentNotice()}`;
 }
 function questionBankManagerForm() {
@@ -1268,6 +1732,10 @@ function questionBankManagerForm() {
   </form>`;
 }
 function startGeneratedQuiz() {
+  if (hasPremiumBuilderSettings()) {
+    openMembershipGate(quizBuilderDraft.questionType !== 'multiple-choice' ? 'fullQuestionBank' : 'advancedQuizStudio');
+    return;
+  }
   const pool = builderQuestionPool();
   if (!pool.length) {
     showToast('No questions match this exact learning selection yet. Try another topic or difficulty.', 'warning');
@@ -1285,6 +1753,7 @@ function startGeneratedQuiz() {
     showToast('Preview the current quiz selection before starting.', 'warning');
     return;
   }
+  if (!recordQuizStart()) return;
   const level = AtlasEducation.getById(AtlasEducation.levels, quizBuilderDraft.levelId);
   const grade = AtlasEducation.getById(AtlasEducation.grades, quizBuilderDraft.gradeId);
   const subject = getBuilderSubjects(quizBuilderDraft.levelId, quizBuilderDraft.curriculumId, quizBuilderDraft.gradeId).find(item => item.id === quizBuilderDraft.subjectId);
@@ -1292,11 +1761,14 @@ function startGeneratedQuiz() {
   activeQuiz = {
     id: `custom-${Date.now()}`, title: `${subject?.name || 'Learning'}${topic ? ` · ${topic.name}` : ''}`,
     category: 'learning', difficulty, premium: false, description: `${level?.name || ''} · ${grade?.name || ''}`,
+    membershipRequired: builderConfigurationRequiresPremium(quizBuilderDraft),
     duration: Number(quizBuilderDraft.timeLimit) || 0,
     metadata: {
       countryId: quizBuilderDraft.countryId, curriculumId: quizBuilderDraft.curriculumId,
       educationLevelId: quizBuilderDraft.levelId, gradeId: quizBuilderDraft.gradeId,
       subjectId: quizBuilderDraft.subjectId, topicId: quizBuilderDraft.topicId,
+      combinationId: quizBuilderDraft.combinationId,
+      facultyId: educationPreferences().facultyId, programmeId: educationPreferences().programmeId,
       mode: quizBuilderDraft.mode
     }
   };
@@ -1304,7 +1776,7 @@ function startGeneratedQuiz() {
     kind: 'bank', questions: chosen, current: 0, selected: null, answers: [],
     responses: [], review: [], remaining: activeQuiz.duration * 60, finished: false,
     timerEnabled: activeQuiz.duration > 0, immediateFeedback: quizBuilderDraft.mode === 'practice' && quizBuilderDraft.immediateFeedback,
-    mode: quizBuilderDraft.mode, confirming: false, savedAttemptId: ''
+    mode: quizBuilderDraft.mode, confirming: false, savedAttemptId: '', startedAt: Date.now()
   };
   quizBuilderDraft.preview = false;
   quizBuilderPreviewQuestions = [];
@@ -1314,11 +1786,8 @@ function startGeneratedQuiz() {
 function startQuiz(quizId) {
   const quiz = quizzes.find(item => item.id === quizId);
   if (!quiz) { showToast('That quiz could not be found.', 'warning'); return; }
-  if (!premiumQuizAccessAllowed(quiz)) {
-    navigate('plus');
-    showToast('Atlas Plus membership is required to start this quiz. Your progress is unchanged.', 'warning');
-    return;
-  }
+  if (quiz.premium && !openMembershipGate('premiumQuiz')) return;
+  if (!recordQuizStart()) return;
   if (timerId) window.clearInterval(timerId);
   activeQuiz = quiz;
   const questions = quiz.questions.map((question, index) => ({ ...question, originalIndex: index }));
@@ -1326,7 +1795,7 @@ function startQuiz(quizId) {
     const swapIndex = Math.floor(Math.random() * (index + 1));
     [questions[index], questions[swapIndex]] = [questions[swapIndex], questions[index]];
   }
-  quizSession = { questions, current: 0, selected: null, answers: [], remaining: 0, finished: false, timerEnabled: true };
+  quizSession = { questions, current: 0, selected: null, answers: [], remaining: 0, finished: false, timerEnabled: true, startedAt: Date.now() };
   navigate('quiz');
 }
 function bankAnswerText(question, answer) {
@@ -1514,7 +1983,7 @@ function finishQuiz(force = false) {
     render();
     return;
   }
-  if (!premiumQuizAccessAllowed(activeQuiz)) {
+  if (!quizAccessAllowed(activeQuiz)) {
     if (timerId) window.clearInterval(timerId);
     timerId = null;
     activeQuiz = null;
@@ -1550,7 +2019,11 @@ function finishQuiz(force = false) {
   state.stats.lastActiveDate = today;
   state.stats.activeDates = state.stats.activeDates.slice(-60);
   const now = new Date();
-  const historyEntry = { quizId: activeQuiz.id, title: activeQuiz.title, category: activeQuiz.category, correct, total: quizSession.questions.length, xp, premiumQuiz: Boolean(activeQuiz.premium), date: now.toISOString() };
+  const historyEntry = {
+    quizId: activeQuiz.id, title: activeQuiz.title, category: activeQuiz.category, correct,
+    total: quizSession.questions.length, xp, premiumQuiz: Boolean(activeQuiz.premium), date: now.toISOString(),
+    durationSeconds: Number.isFinite(quizSession.startedAt) ? Math.max(0, Math.round((Date.now() - quizSession.startedAt) / 1000)) : null
+  };
   if (quizSession.kind === 'bank') {
     const attempt = {
       id: `attempt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1562,6 +2035,7 @@ function finishQuiz(force = false) {
     state.quizAttempts = state.quizAttempts.slice(0, 50);
     historyEntry.attemptId = attempt.id;
     quizSession.savedAttemptId = attempt.id;
+    recordTopicCompletions(activeQuiz, quizSession.questions, quizSession.answers, now.toISOString());
     for (const answer of quizSession.answers) {
       const question = answer.question;
       const metadata = activeQuiz.metadata;
@@ -1618,7 +2092,7 @@ function rewardsPage() {
       </div>
     </section>
     <div class="section-heading" style="margin-top:24px"><div><h2>Your achievement collection</h2><p>${achievements().filter(item => item.earned).length} earned · Earn the rest by learning</p></div></div>
-    <div class="badge-grid">${achievements().map(item => `<article class="badge-card ${item.earned ? '' : 'locked'} ${item.premium ? 'premium-achievement' : ''}"><span class="badge-icon">${item.earned ? item.icon : '🔒'}</span><strong>${escapeHTML(item.name)}${item.premium ? ' · Plus' : ''}</strong><p>${item.earned ? item.description : `Locked · ${item.description}`}</p></article>`).join('')}</div>
+    <div class="badge-grid">${achievements().map(item => `<article class="badge-card ${item.earned ? '' : 'locked'} ${item.premium ? 'premium-achievement' : ''}"><span class="badge-icon" aria-hidden="true">${item.earned ? item.icon : '🔒'}</span><strong>${escapeHTML(item.name)}${item.premium ? ' · Plus' : ''}</strong><p>${item.earned ? item.description : `Locked · ${item.description}`}</p>${item.earnedAt ? `<small class="achievement-date">Earned ${formatDate(item.earnedAt)}</small>` : ''}</article>`).join('')}</div>
     <div class="demo-warning" style="margin-top:17px">Badges and challenge XP are earned through completed quiz activity. Atlas Plus badges require actual Atlas Plus quiz results; enabling a demo membership never grants them.</div>`;
 }
 
@@ -1681,18 +2155,101 @@ function profilePage() {
   const membership = membershipStatus();
   return `${pageHeading('YOUR LEARNING, YOUR WAY', 'My profile', 'A personal snapshot of your progress on this browser.', '<button type="button" class="secondary-button" data-page="settings">Learning preferences</button>')}
     <section class="profile-hero"><div class="profile-avatar-large">${escapeHTML(initials(state.profile.name))}</div><div class="profile-info"><h2>${name}</h2><p>${email || 'No email added'} · Local demo profile</p><span class="profile-tag ${membership.isActive ? 'premium-profile-tag' : ''}">${membership.isActive ? '♛' : '✦'} ${membershipLabel}</span></div><button type="button" class="secondary-button" data-page="premium">Manage membership</button><button type="button" class="secondary-button" data-scroll-edit>Edit profile</button></section>
-    ${membership.plan ? `<section class="membership-management ${membership.isExpired ? 'expired' : ''}" aria-label="Membership details"><div><span class="eyebrow">${membership.isExpired ? 'DEMO MEMBERSHIP EXPIRED' : 'CURRENT DEMO MEMBERSHIP'}</span><h2>Atlas Plus ${membership.plan === 'yearly' ? 'Yearly' : 'Monthly'}</h2><p>Started ${formatMembershipDate(membership.startedAt)} · ${membership.isExpired ? 'Expired' : 'Renews/ends'} ${formatMembershipDate(membership.expiresAt)}</p></div><button type="button" class="${membership.isExpired ? 'primary-button gold-button' : 'secondary-button'}" data-page="premium">${membership.isExpired ? 'Choose a plan again' : 'Manage plan'} ${icons.arrow}</button></section>` : ''}
+    <section class="membership-management ${membership.isExpired ? 'expired' : ''}" aria-label="Membership details"><div><span class="eyebrow">${membership.isExpired ? 'PREVIOUS DEMO MEMBERSHIP EXPIRED' : 'CURRENT MEMBERSHIP'}</span><h2>${membership.isActive ? `Atlas Plus ${membership.plan === 'yearly' ? 'Yearly' : 'Monthly'}` : membership.isExpired ? `Free · Previous Atlas Plus ${membership.plan === 'yearly' ? 'Yearly' : 'Monthly'}` : 'Free membership'}</h2><p>${membership.isActive || membership.isExpired ? `Started ${formatMembershipDate(membership.startedAt)} · ${membership.isExpired ? 'Expired' : 'Access ends'} ${formatMembershipDate(membership.expiresAt)}` : `${freeQuizAttemptsUsed()} of ${membershipConfig.freeMonthlyQuizLimit} Free quiz starts used this month. Your learning progress stays saved if you change plans.`}</p></div><button type="button" class="${membership.isExpired ? 'primary-button gold-button' : 'secondary-button'}" data-page="premium">${membership.isActive ? 'Manage plan' : membership.isExpired ? 'Choose a plan again' : 'Compare plans'} ${icons.arrow}</button></section>
     <div class="profile-stats"><div class="profile-stat"><strong>${state.stats.quizzes}</strong><span>Quizzes completed</span></div><div class="profile-stat"><strong>${state.stats.points}</strong><span>Learning points</span></div><div class="profile-stat"><strong>${earned.length}</strong><span>Badges earned</span></div></div>
     <section class="form-card" id="profile-edit"><h3>Profile details</h3><p>Only saved in this browser. This is not a verified account.</p><form id="profile-form"><div class="form-grid"><div class="field"><label for="profile-name">Display name</label><input id="profile-name" name="name" value="${name}" maxlength="40" required autocomplete="nickname"></div><div class="field"><label for="profile-email">Email (optional)</label><input id="profile-email" name="email" type="email" value="${email}" maxlength="120" autocomplete="email"></div></div><div class="form-actions"><button type="submit" class="primary-button">Save changes</button><span class="form-footnote">No password or authentication credentials are stored.</span></div></form></section>
     <section class="form-card" style="margin-top:15px"><div class="section-heading"><div><h3>Recent quiz activity</h3><p>Your recent sessions and earned experience.</p></div><button class="text-button" type="button" data-page="rewards">View rewards</button></div>${historyMarkup(8)}</section>
     <section class="form-card saved-attempts-card"><div class="section-heading"><div><h3>Completed custom quizzes</h3><p>Review saved answers, scores and explanations.</p></div><button class="text-button" type="button" data-page="quiz-builder">Create quiz</button></div>${quizAttemptsMarkup()}</section>
     <div class="danger-zone"><div><strong>${state.profile.signedIn ? 'Sign out of demo mode' : 'Continue as a demo learner'}</strong><span>${state.profile.signedIn ? 'Progress remains saved in this browser and is not protected by an account.' : 'Enter a display name to set up a local demo profile.'}</span></div><button type="button" class="danger-button" data-sign-out>${state.profile.signedIn ? 'Sign out' : 'Continue in demo mode'}</button></div>`;
 }
+function analyticsPage() {
+  const isPremium = hasActivePremiumMembership();
+  const allRecords = analyticsRecords();
+  const filters = isPremium ? analyticsFilters : { levelId: 'all', subjectId: 'all', topicId: 'all', range: 'all' };
+  const records = isPremium ? filteredAnalyticsRecords(filters) : allRecords;
+  const questionCount = records.reduce((sum, item) => sum + item.total, 0);
+  const correctCount = records.reduce((sum, item) => sum + item.correct, 0);
+  const average = questionCount ? Math.round(correctCount / questionCount * 100) : null;
+  const totalTime = totalLearningSeconds(records);
+  const trend = activityTrend(records);
+  const hasTrend = trend.some(item => item.sessions);
+  const trendMarkup = trend.map(day => {
+    const height = day.score ?? 0;
+    return `<div class="learning-trend-day" title="${day.key}: ${day.sessions ? `${day.score}% average across ${day.sessions} quiz${day.sessions === 1 ? '' : 'zes'}` : 'No quizzes recorded'}">
+      <div class="learning-trend-bar-wrap"><span class="learning-trend-bar ${day.sessions ? '' : 'no-activity'}" style="height:${height}%"></span></div>
+      <span>${day.label}</span>${day.sessions ? `<small>${day.score}%</small>` : '<small>—</small>'}
+    </div>`;
+  }).join('');
+  const levelOptions = AtlasEducation.levels.map(level =>
+    `<option value="${escapeHTML(level.id)}" ${filters.levelId === level.id ? 'selected' : ''}>${escapeHTML(level.name)}</option>`
+  ).join('');
+  const subjectOptions = [...new Map(analyticsRecords()
+    .filter(item => filters.levelId === 'all' || item.levelId === filters.levelId)
+    .map(item => [item.subjectId, { id: item.subjectId, name: item.subjectName }])).values()]
+    .map(subject => `<option value="${escapeHTML(subject.id)}" ${filters.subjectId === subject.id ? 'selected' : ''}>${escapeHTML(subject.name)}</option>`).join('');
+  const topicOptions = [...new Map(Object.keys(state.topicPerformance).map(key => {
+    const [countryId, curriculumId, levelId, gradeId, subjectId, topicId] = key.split('|');
+    const subject = educationCatalogSubjects().find(item => item.id === subjectId);
+    const topic = subject?.topics.find(item => item.id === topicId);
+    return topic ? [topicId, { id: topicId, name: topic.name, levelId, subjectId }] : null;
+  }).filter(Boolean).filter(([, topic]) =>
+    (filters.levelId === 'all' || topic.levelId === filters.levelId) &&
+    (filters.subjectId === 'all' || topic.subjectId === filters.subjectId)
+  )).values()].map(topic =>
+    `<option value="${escapeHTML(topic.id)}" ${filters.topicId === topic.id ? 'selected' : ''}>${escapeHTML(topic.name)}</option>`
+  ).join('');
+  const subjectRows = analyticsSubjectRows(records);
+  const topicRows = isPremium ? analyticsTopicRows(filters.range, filters) : [];
+  const bestSubject = subjectRows.filter(item => item.total >= 5).sort((a, b) => b.score - a.score)[0];
+  const focusSubject = subjectRows.filter(item => item.total >= 5).sort((a, b) => a.score - b.score)[0];
+  const historyRows = records.slice(0, 20).map(entry => `<div class="analytics-history-row">
+    <span class="analytics-history-date">${formatDate(entry.date)}</span>
+    <div><strong>${escapeHTML(entry.title)}</strong><small>${escapeHTML(entry.subjectName)}${entry.topicName ? ` · ${escapeHTML(entry.topicName)}` : ''}</small></div>
+    <span class="analytics-history-score">${entry.correct}/${entry.total}<small>${Math.round(entry.correct / entry.total * 100)}%</small></span>
+  </div>`).join('');
+  return `${pageHeading('YOUR PROGRESS, IN CONTEXT', 'Learning analytics', 'Understand your quiz results and use them to choose a helpful next step.', '<button type="button" class="secondary-button" data-page="home">Back to dashboard</button>')}
+    <section class="analytics-summary-grid" aria-label="Analytics overview">
+      <article><span>Average score</span><strong>${average === null ? '—' : `${average}%`}</strong><small>${questionCount ? `${questionCount} recorded answers` : 'No recorded quiz scores yet'}</small></article>
+      <article><span>Quiz attempts</span><strong>${records.length}</strong><small>${isPremium ? `${filters.range === 'all' ? 'All recorded' : `Last ${filters.range} days`} sessions` : 'Recorded completed sessions'}</small></article>
+      <article><span>Questions correct</span><strong>${questionCount ? `${correctCount}/${questionCount}` : '—'}</strong><small>${questionCount ? 'From saved quiz results' : 'Results appear after a quiz'}</small></article>
+      <article><span>Learning time</span><strong>${totalTime ? formatLearningDuration(totalTime) : '—'}</strong><small>${totalTime ? 'Elapsed time in completed sessions' : 'Tracked from newly started sessions'}</small></article>
+    </section>
+    ${isPremium ? `<section class="analytics-filter-panel" aria-label="Filter learning analytics">
+      <div><strong>Filter your report</strong><span>Filters are based on saved quiz activity.</span></div>
+      <label><span>Education level</span><select data-analytics-filter="levelId"><option value="all">All levels</option>${levelOptions}</select></label>
+      <label><span>Subject</span><select data-analytics-filter="subjectId"><option value="all">All subjects</option>${subjectOptions}</select></label>
+      <label><span>Topic</span><select data-analytics-filter="topicId"><option value="all">All topics</option>${topicOptions}</select></label>
+      <label><span>Date range</span><select data-analytics-filter="range">${[['7','Last 7 days'],['30','Last 30 days'],['90','Last 90 days'],['all','All recorded activity']].map(([value,label]) => `<option value="${value}" ${filters.range === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+    </section>` : ''}
+    <section class="analytics-main-grid">
+      <article class="section-card analytics-trend-card"><div class="section-heading"><div><h2>Performance over time</h2><p>Average score by day · last seven days</p></div></div>
+        ${hasTrend ? `<div class="learning-trend-chart analytics-chart" role="img" aria-label="Daily average quiz scores over the last seven days">${trendMarkup}</div>${records.length < 2 ? '<p class="analytics-footnote">One completed quiz is not enough to establish a performance trend yet.</p>' : ''}` : `<div class="analytics-empty"><strong>No quiz results in this period</strong><span>Complete a quiz to begin building your performance history.</span><button type="button" class="primary-button" data-page="explore">Explore free quizzes ${icons.arrow}</button></div>`}
+      </article>
+      <article class="section-card analytics-history-card"><div class="section-heading"><div><h2>Quiz attempt history</h2><p>Recent saved scores, newest first</p></div></div>
+        ${historyRows ? `<div class="analytics-history-list">${historyRows}</div>` : '<div class="analytics-empty compact"><span>No quiz activity matches this filter.</span></div>'}
+      </article>
+    </section>
+    ${isPremium ? `<section class="analytics-detail-grid">
+      <article class="section-card"><div class="section-heading"><div><h2>Subject performance</h2><p>Scores from your recorded quizzes</p></div></div>
+        ${subjectRows.length ? `<div class="analytics-subject-list">${subjectRows.map(item => `<div class="analytics-subject-row"><div><strong>${escapeHTML(item.name)}</strong><span>${item.attempts} quiz${item.attempts === 1 ? '' : 'zes'} · ${item.correct}/${item.total} correct</span></div><strong>${item.score}%</strong><div class="dashboard-progress-track" role="progressbar" aria-label="${escapeHTML(item.name)} performance" aria-valuenow="${item.score}" aria-valuemin="0" aria-valuemax="100"><span style="width:${item.score}%"></span></div></div>`).join('')}</div>` : '<div class="analytics-empty compact"><span>No subject scores are available for this filter.</span></div>'}
+        ${bestSubject && subjectRows.filter(item => item.total >= 5).length > 1 ? `<div class="analytics-insights"><span>Strongest subject <strong>${escapeHTML(bestSubject.name)} · ${bestSubject.score}%</strong></span><span>Most to revisit <strong>${escapeHTML(focusSubject.name)} · ${focusSubject.score}%</strong></span></div>` : '<p class="analytics-footnote">Strongest and focus subjects appear after at least five recorded answers per subject.</p>'}
+      </article>
+      <article class="section-card"><div class="section-heading"><div><h2>Topic accuracy</h2><p>Correct answers from saved topic-level practice</p></div></div>
+        ${topicRows.length ? `<div class="analytics-topic-list">${topicRows.slice(0, 10).map(item => `<div class="analytics-topic-row"><div><strong>${escapeHTML(item.topic)}</strong><span>${escapeHTML(item.subject)} · ${item.total} answered</span></div><strong>${item.score}%</strong></div>`).join('')}</div>` : '<div class="analytics-empty compact"><strong>No topic-level results yet</strong><span>Topic accuracy is recorded when you complete a Quiz Studio practice session.</span><button type="button" class="secondary-button" data-page="quiz-builder">Build a topic quiz</button></div>'}
+      </article>
+    </section>` : `<section class="analytics-premium-lock"><span class="analytics-lock-icon" aria-hidden="true">♛</span><div><div class="eyebrow">PREMIUM REPORTING</div><h2>See which subjects and topics need your attention.</h2><p>Your Free dashboard still includes quiz scores, activity history and learning progress. Premium adds filtered subject and topic reports.</p></div><button type="button" class="primary-button gold-button" data-membership-feature="advancedAnalytics">Explore Premium analytics ${icons.arrow}</button></section>`}
+    <p class="analytics-data-note">Reports reflect quiz results stored in this browser. Curriculum topics appear after topic-based Quiz Studio sessions; no learning activity or score is inferred.</p>`;
+}
 function membershipStatusLabel() {
   const membership = membershipStatus();
   if (membership.isActive) return `Atlas Plus ${membership.plan === 'yearly' ? 'Yearly' : 'Monthly'} · Demo`;
-  if (membership.isExpired) return `Atlas Plus ${membership.plan === 'yearly' ? 'Yearly' : 'Monthly'} · Expired`;
+  if (membership.isExpired) return `Free member · Atlas Plus ${membership.plan === 'yearly' ? 'Yearly' : 'Monthly'} expired`;
   return 'Free member';
+}
+function formatMembershipPrice(price) {
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency', currency: membershipConfig.currency, maximumFractionDigits: 2
+  }).format(price);
 }
 
 function settingsPage() {
@@ -1725,9 +2282,10 @@ function authPage() {
     <div class="auth-switch"><button type="button" data-page="home">Continue as guest</button></div></section>`;
 }
 
-const pageLabels = { home: 'Home', explore: 'Explore quizzes', categories: 'Categories', learn: 'Learn', 'quiz-builder': 'Quiz studio', premium: 'Premium', plus: 'Atlas Plus', rewards: 'Rewards', leaderboard: 'Leaderboard', profile: 'My profile', settings: 'Settings', auth: 'Demo profile', quiz: 'Quiz session', verify: 'Certificate verification' };
+const pageLabels = { home: 'Home', explore: 'Explore quizzes', categories: 'Categories', learn: 'Learn', 'quiz-builder': 'Quiz studio', analytics: 'Learning analytics', premium: 'Premium', plus: 'Atlas Plus', rewards: 'Rewards', leaderboard: 'Leaderboard', profile: 'My profile', settings: 'Settings', auth: 'Demo profile', quiz: 'Quiz session', verify: 'Certificate verification' };
 function navigate(page) {
   if (timerId && page !== 'quiz') window.clearInterval(timerId);
+  if (activePage === 'premium' && page !== 'premium') membershipReturnPage = null;
   if (page === 'settings' && activePage !== 'settings') educationSettingsDraft = null;
   activePage = page;
   if (location.hash !== `#${page}`) history.replaceState(null, '', `#${page}`);
@@ -1751,7 +2309,7 @@ function render() {
   renderUser();
   document.getElementById('current-page-label').textContent = pageLabels[activePage] || 'Home';
   const page = {
-    home: dashboardPage, explore: explorePage, categories: categoriesPage, learn: educationPage, 'quiz-builder': quizBuilderPage, premium: premiumPage, plus: plusDashboardPage,
+    home: dashboardPage, explore: explorePage, categories: categoriesPage, learn: educationPage, 'quiz-builder': quizBuilderPage, analytics: analyticsPage, premium: premiumPage, plus: plusDashboardPage,
     rewards: rewardsPage, leaderboard: leaderboardPage, profile: profilePage, settings: settingsPage,
     auth: authPage, quiz: quizPage, verify: verifyCertificatePage
   }[activePage] || dashboardPage;
@@ -1811,28 +2369,59 @@ function premiumPage() {
   const previewCertificate = state.certificates.find(certificate => certificate.id === certificatePreviewId);
   const membershipLabel = membershipStatusLabel();
   const selectedPlan = selectedPremiumPlan;
+  const premiumBenefits = [
+    'Unlimited quiz starts',
+    'Full available sample question bank and question formats',
+    `Sessions with up to ${membershipConfig.premiumQuizQuestionLimit} questions`,
+    'Advanced and adaptive difficulty, timed sessions and assessments',
+    'Atlas Plus learning reports, challenges and achievement badges',
+    'Printable certificate preview after earning a Perfect Score'
+  ];
   const benefits = {
-    free: ['Basic quizzes', 'Limited daily challenges', 'Basic achievements'],
-    monthly: ['Unlimited quizzes', 'Exclusive challenges', 'Advanced performance statistics', 'Premium badges', 'Eligible downloadable certificates'],
-    yearly: ['All monthly Premium benefits', 'Exclusive yearly rewards', 'Special certificate designs', 'Priority access to new features']
+    free: [
+      'Browse the full learning catalog and free quizzes',
+      `${membershipConfig.freeMonthlyQuizLimit} quiz starts each month`,
+      `Focused multiple-choice practice up to ${membershipConfig.freeQuizQuestionLimit} questions`,
+      'Basic scores, quiz history and learning progress'
+    ],
+    monthly: premiumBenefits,
+    yearly: premiumBenefits
   };
+  const comparisonRows = [
+    ['Learning catalog and free quizzes', 'Included', 'Included'],
+    [`Quiz starts per month`, `${membershipConfig.freeMonthlyQuizLimit}`, 'Unlimited'],
+    ['Question formats', 'Multiple choice', 'All available formats'],
+    ['Quiz studio session size', `Up to ${membershipConfig.freeQuizQuestionLimit}`, `Up to ${membershipConfig.premiumQuizQuestionLimit}`],
+    ['Advanced / adaptive difficulty', '—', 'Included'],
+    ['Timed assessments', '—', 'Included'],
+    ['Atlas Plus reports, challenges and badges', '—', 'Included'],
+    ['Certificate preview after Perfect Score', '—', 'Included']
+  ];
   const planCard = (plan, title, price, cadence, highlight = false) => `
     <article class="membership-plan ${highlight ? 'featured' : ''} ${selectedPlan === plan ? 'selected' : ''}">
       <div class="membership-plan-top"><span class="membership-plan-icon">${plan === 'free' ? '✦' : '♛'}</span>${highlight ? '<span class="popular-label">BEST VALUE</span>' : ''}</div>
       <h3>${title}</h3><div class="membership-price">${price}<small>${cadence}</small></div>
       <ul class="membership-benefits">${benefits[plan].map(benefit => `<li><span aria-hidden="true">✓</span>${benefit}</li>`).join('')}</ul>
       ${plan === 'free'
-        ? `<button type="button" class="plan-select-button free-plan-button" data-free-plan ${currentPlan ? '' : 'disabled'}>${currentPlan ? 'Switch to Free' : 'Current plan'}</button>`
+        ? currentPlan
+          ? '<button type="button" class="plan-select-button free-plan-button" data-free-plan>Switch to Free</button>'
+          : `<button type="button" class="plan-select-button free-plan-button" ${membershipReturnPage ? 'data-return-activity' : 'data-page="home"'}>Continue with Free</button>`
         : `<button type="button" class="plan-select-button ${selectedPlan === plan ? 'selected' : ''}" data-select-plan="${plan}" aria-pressed="${selectedPlan === plan}" ${currentPlan === plan ? 'disabled' : ''}>${currentPlan === plan ? 'Current demo plan' : selectedPlan === plan ? 'Selected' : `Choose ${plan}`}</button>`}
     </article>`;
-  return `${pageHeading('A LITTLE EXTRA ROOM TO GROW', 'Choose your learning level', 'Flexible options for curious minds. Pick a plan to preview your membership.')}
-    <section class="premium-hero premium-hero-upgraded"><div class="premium-hero-copy"><div class="premium-brand-lockup"><span class="premium-crown" aria-hidden="true">♛</span><span>ATLAS <strong>PLUS</strong></span></div><h2>More room to grow.</h2><p>Thoughtful challenges, deeper insights, and rewards for every step of your learning journey.</p><button type="button" class="primary-button gold-button" data-premium-cta>${currentPlan ? 'Manage demo membership' : 'Upgrade with a demo membership'} ${icons.arrow}</button></div><div class="graduation-photo-frame"><img src="https://images.pexels.com/photos/7713351/pexels-photo-7713351.jpeg?auto=compress&amp;fit=crop&amp;w=900&amp;q=85" alt="Graduates raising their hands to toss mortarboards; an inset shows a hand holding a diploma beside a graduation cap." loading="lazy"><span class="photo-gold-seal" aria-hidden="true">♛</span><span class="photo-caption">CELEBRATE EVERY MILESTONE</span></div></section>
-    <div class="membership-status premium-status ${membership.isExpired ? 'expired' : ''}"><span class="status-crown" aria-hidden="true">${membership.isExpired ? '!' : '♛'}</span><strong>Membership status: ${membershipLabel}</strong><span>${currentPlan ? `Started ${formatMembershipDate(membership.startedAt)} · Expires ${formatMembershipDate(membership.expiresAt)} · Demo only, no payment was made.` : membership.isExpired ? `Expired ${formatMembershipDate(membership.expiresAt)}. Choose a plan to reactivate demo access.` : 'Choose a plan to preview the demo membership. No payment is collected.'}</span></div>
-    <div class="plans-heading" id="membership-plans"><div><h2>Choose your membership</h2><p>Switch between monthly and yearly options at any time in this demo.</p></div><span class="billing-toggle-label">Secure checkout is not connected</span></div>
+  return `${pageHeading('A LITTLE EXTRA ROOM TO GROW', 'Choose your learning level', 'Keep learning for free, or compare the practical tools included with Atlas Plus.')}
+    <section class="premium-hero premium-hero-upgraded"><div class="premium-hero-copy"><div class="premium-brand-lockup"><span class="premium-crown" aria-hidden="true">♛</span><span>ATLAS <strong>PLUS</strong></span></div><h2>More room to grow.</h2><p>Build longer practice sessions, explore every available question format, and see more of your learning progress.</p><button type="button" class="primary-button gold-button" data-premium-cta>${currentPlan ? 'Manage demo membership' : 'Preview Premium · DEMO MODE'} ${icons.arrow}</button></div><div class="graduation-photo-frame"><img src="https://images.pexels.com/photos/7713351/pexels-photo-7713351.jpeg?auto=compress&amp;fit=crop&amp;w=900&amp;q=85" alt="Graduates raising their hands to toss mortarboards; an inset shows a hand holding a diploma beside a graduation cap." loading="lazy"><span class="photo-gold-seal" aria-hidden="true">♛</span><span class="photo-caption">CELEBRATE EVERY MILESTONE</span></div></section>
+    ${membershipReturnPage ? `<div class="membership-return-note"><span>You came here from <strong>${escapeHTML(pageLabels[membershipReturnPage] || 'your learning activity')}</strong>.</span><button type="button" class="text-button" data-return-activity>Return to your activity ${icons.arrow}</button></div>` : ''}
+    <div class="membership-status premium-status ${membership.isExpired ? 'expired' : ''}"><span class="status-crown" aria-hidden="true">${membership.isExpired ? '!' : '♛'}</span><strong>Membership status: ${membershipLabel}</strong><span>${currentPlan ? `Started ${formatMembershipDate(membership.startedAt)} · Access expires ${formatMembershipDate(membership.expiresAt)} · DEMO MODE, no payment was made.` : membership.isExpired ? `Previous demo plan expired ${formatMembershipDate(membership.expiresAt)}. Free access remains available.` : `Free plan · ${freeQuizAttemptsUsed()} of ${membershipConfig.freeMonthlyQuizLimit} quiz starts used this month.`}</span></div>
+    <div class="comparison-title">Free and Premium at a glance</div>
+    <section class="comparison-table" aria-label="Free and Premium feature comparison">
+      <div class="comparison-row"><strong>Available feature</strong><strong>Free</strong><strong>Premium</strong></div>
+      ${comparisonRows.map(([name, free, premium]) => `<div class="comparison-row"><span>${name}</span><span>${free}</span><span>${premium}</span></div>`).join('')}
+    </section>
+    <div class="plans-heading" id="membership-plans"><div><h2>Choose your membership</h2><p>Affordable monthly or annual options. Cancel any time in this demo.</p></div><span class="billing-toggle-label">Secure checkout is not connected</span></div>
     <section class="membership-plans-grid" aria-label="Membership options">
-      ${planCard('free', 'Free', '$0', ' / forever')}
-      ${planCard('monthly', 'Premium Monthly', '$4.99', ' / month')}
-      ${planCard('yearly', 'Premium Yearly', '$39.99', ' / year', true)}
+      ${planCard('free', 'Free', formatMembershipPrice(0), ' / forever')}
+      ${planCard('monthly', 'Premium Monthly', formatMembershipPrice(membershipConfig.prices.monthly), ' / month')}
+      ${planCard('yearly', 'Premium Yearly', formatMembershipPrice(membershipConfig.prices.yearly), ' / year', true)}
     </section>
     <div class="demo-payment-note"><strong>Demonstration checkout only.</strong> Activating a demo membership does not charge you or process a payment. No card details are requested or stored.</div>
     ${demoCheckoutOpen && selectedPlan !== currentPlan ? `<section class="demo-checkout" aria-label="Demo membership confirmation"><span class="checkout-crown" aria-hidden="true">♛</span><div><h3>Preview ${selectedPlan === 'yearly' ? 'Premium Yearly' : 'Premium Monthly'}?</h3><p>This enables a local demo membership indicator only. <strong>No payment will be made.</strong></p></div><div class="checkout-actions"><button type="button" class="secondary-button" data-cancel-demo>Not now</button><button type="button" class="primary-button gold-button" data-confirm-demo>Confirm demo membership</button></div></section>` : ''}
@@ -1841,7 +2430,7 @@ function premiumPage() {
       ${!perfectQuiz
         ? `<div class="certificate-locked">Complete a quiz with a perfect score to earn certificate eligibility.</div><button type="button" class="secondary-button certificate-download" disabled>Certificate locked until earned ${icons.lock}</button>`
         : !hasActivePremiumMembership()
-          ? `<div class="certificate-earned">✓ Perfect Score earned in <strong>${escapeHTML(perfectQuiz.title)}</strong></div><div class="certificate-locked">Your achievement is earned. Choose a demo membership to preview the eligible certificate design.</div><button type="button" class="secondary-button certificate-download" data-page="premium">Explore membership options ${icons.arrow}</button>`
+          ? `<div class="certificate-earned">✓ Perfect Score earned in <strong>${escapeHTML(perfectQuiz.title)}</strong></div><div class="certificate-locked">Your achievement is earned. Premium unlocks a printable certificate preview.</div><button type="button" class="secondary-button certificate-download" data-membership-feature="premiumCertificate">See certificate benefits ${icons.arrow}</button>`
           : !earnedCertificate
             ? `<div class="certificate-earned">✓ Perfect Score earned in <strong>${escapeHTML(perfectQuiz.title)}</strong></div><button type="button" class="primary-button certificate-download" data-create-certificate="${escapeHTML(perfectQuiz.quizId)}">Create certificate preview ${icons.arrow}</button>`
             : `<div class="certificate-earned">✓ Achievement verified · Certificate ID <strong>${escapeHTML(earnedCertificate.id)}</strong></div><div class="certificate-actions"><button type="button" class="secondary-button certificate-download" data-preview-certificate="${escapeHTML(earnedCertificate.id)}">Preview certificate</button><button type="button" class="primary-button certificate-download" data-print-certificate="${escapeHTML(earnedCertificate.id)}">Print / save as PDF ${icons.arrow}</button></div>`
@@ -1851,6 +2440,17 @@ function premiumPage() {
 }
 
 function bindPageInteractions() {
+  document.querySelectorAll('[data-analytics-filter]').forEach(control => control.addEventListener('change', () => {
+    const key = control.dataset.analyticsFilter;
+    analyticsFilters[key] = control.value;
+    if (key === 'levelId') {
+      analyticsFilters.subjectId = 'all';
+      analyticsFilters.topicId = 'all';
+    } else if (key === 'subjectId') {
+      analyticsFilters.topicId = 'all';
+    }
+    render();
+  }));
   const builderSearch = document.getElementById('builder-search');
   builderSearch?.addEventListener('input', event => {
     quizBuilderSearch = event.target.value;
@@ -1896,7 +2496,7 @@ function bindPageInteractions() {
     render();
   }));
   document.querySelector('[data-builder-number="questionCount"]')?.addEventListener('input', event => {
-    quizBuilderDraft.questionCount = Math.min(20, Math.max(1, Number(event.target.value) || 1));
+    quizBuilderDraft.questionCount = Math.min(builderQuestionLimit(), Math.max(1, Number(event.target.value) || 1));
     quizBuilderDraft.preview = false;
     quizBuilderPreviewQuestions = [];
     document.querySelector('.quiz-preview')?.remove();
@@ -1906,6 +2506,10 @@ function bindPageInteractions() {
     quizBuilderDraft.immediateFeedback = event.target.checked;
   });
   document.querySelector('[data-preview-generated]')?.addEventListener('click', () => {
+    if (hasPremiumBuilderSettings()) {
+      openMembershipGate(quizBuilderDraft.questionType !== 'multiple-choice' ? 'fullQuestionBank' : 'advancedQuizStudio');
+      return;
+    }
     const pool = builderQuestionPool();
     const difficulty = adaptiveDifficulty(pool, quizBuilderDraft);
     const eligible = pool.filter(item => item.difficulty === difficulty);
@@ -1956,10 +2560,12 @@ function bindPageInteractions() {
     navigate('quiz-builder');
   }));
   document.querySelectorAll('[data-edit-bank-question]').forEach(button => button.addEventListener('click', () => {
+    if (!membershipAccess('fullQuestionBank').allowed) { openMembershipGate('fullQuestionBank'); return; }
     bankQuestionEditId = button.dataset.editBankQuestion;
     render();
   }));
   document.querySelectorAll('[data-delete-bank-question]').forEach(button => button.addEventListener('click', () => {
+    if (!membershipAccess('fullQuestionBank').allowed) { openMembershipGate('fullQuestionBank'); return; }
     const id = button.dataset.deleteBankQuestion;
     if (bankQuestionDeleteConfirmId !== id) {
       bankQuestionDeleteConfirmId = id;
@@ -1980,11 +2586,17 @@ function bindPageInteractions() {
     }
   }));
   document.querySelector('[data-cancel-bank-edit]')?.addEventListener('click', () => {
+    if (!membershipAccess('fullQuestionBank').allowed) { openMembershipGate('fullQuestionBank'); return; }
     bankQuestionEditId = null;
     render();
   });
   const questionManager = document.getElementById('bank-question-form');
   document.querySelector('.question-manager')?.addEventListener('toggle', event => {
+    if (event.currentTarget.open && !membershipAccess('fullQuestionBank').allowed) {
+      event.currentTarget.open = false;
+      openMembershipGate('fullQuestionBank');
+      return;
+    }
     bankQuestionManagerOpen = event.currentTarget.open;
   });
   questionManager?.addEventListener('change', event => {
@@ -2016,6 +2628,7 @@ function bindPageInteractions() {
   });
   questionManager?.addEventListener('submit', event => {
     event.preventDefault();
+    if (!membershipAccess('fullQuestionBank').allowed) { openMembershipGate('fullQuestionBank'); return; }
     const values = new FormData(questionManager);
     const id = bankQuestionEditId || AtlasQuestionBank.newId();
     const levelId = String(values.get('educationLevelId') || '');
@@ -2329,6 +2942,55 @@ function bindPageInteractions() {
 }
 
 document.addEventListener('click', event => {
+  const membershipFeatureButton = event.target.closest('[data-membership-feature]');
+  if (membershipFeatureButton) {
+    openMembershipGate(membershipFeatureButton.dataset.membershipFeature);
+    return;
+  }
+  if (event.target.closest('[data-close-membership-gate]') ||
+    (event.target.matches('[data-membership-backdrop]'))) {
+    closeMembershipGate();
+    return;
+  }
+  if (event.target.closest('[data-membership-upgrade]')) {
+    membershipGate = null;
+    document.getElementById('membership-gate-root').hidden = true;
+    document.getElementById('membership-gate-root').innerHTML = '';
+    membershipGateReturnFocus = null;
+    navigate('premium');
+    return;
+  }
+  if (event.target.closest('[data-return-activity]')) {
+    const returnPage = membershipReturnPage;
+    membershipReturnPage = null;
+    navigate(returnPage || 'home');
+    return;
+  }
+  const continueTopic = event.target.closest('[data-continue-topic]');
+  if (continueTopic) {
+    const completion = state.topicCompletions.find(item => item.contextKey === continueTopic.dataset.continueTopic);
+    if (!completion) {
+      showToast('That completed topic could not be found in your saved progress.', 'warning');
+      return;
+    }
+    const grade = AtlasEducation.getById(AtlasEducation.grades, completion.gradeId);
+    const subject = educationCatalogSubjects().find(item => item.id === completion.subjectId);
+    if (!grade || !subject?.topics.some(topic => topic.id === completion.topicId)) {
+      showToast('The saved learning topic is no longer available in the catalog.', 'warning');
+      return;
+    }
+    quizBuilderDraft = {
+      countryId: completion.countryId === 'KE' ? 'KE' : 'OTHER',
+      levelId: completion.educationLevelId, curriculumId: completion.curriculumId,
+      gradeId: completion.gradeId, subjectId: completion.subjectId, topicId: completion.topicId,
+      combinationId: completion.combinationId || '', difficulty: 'beginner',
+      questionType: hasActivePremiumMembership() ? 'all' : 'multiple-choice',
+      questionCount: 5, timeLimit: 0, mode: 'practice', immediateFeedback: true, preview: false
+    };
+    quizBuilderPreviewQuestions = [];
+    navigate('quiz-builder');
+    return;
+  }
   const planChoice = event.target.closest('[data-select-plan]');
   if (planChoice) {
     selectedPremiumPlan = planChoice.dataset.selectPlan;
@@ -2357,8 +3019,12 @@ document.addEventListener('click', event => {
       entry.quizId === event.target.closest('[data-create-certificate]').dataset.createCertificate &&
       entry.total > 0 && entry.correct === entry.total
     );
-    if (!hasActivePremiumMembership() || !earnedEntry) {
-      showToast('A certificate requires an earned Perfect Score and an eligible membership preview.', 'warning');
+    if (!membershipAccess('premiumCertificate').allowed) {
+      openMembershipGate('premiumCertificate');
+      return;
+    }
+    if (!earnedEntry) {
+      showToast('A certificate requires an earned Perfect Score.', 'warning');
       return;
     }
     const certificate = getOrCreateCertificate(earnedEntry);
@@ -2379,8 +3045,12 @@ document.addEventListener('click', event => {
       entry.quizId === certificate.quizId && entry.date === certificate.completionDate &&
       entry.total > 0 && entry.correct === entry.total
     );
-    if (!hasActivePremiumMembership() || !verified) {
-      showToast('The certificate needs an eligible demo plan and a matching earned quiz achievement.', 'warning');
+    if (!membershipAccess('premiumCertificate').allowed) {
+      openMembershipGate('premiumCertificate');
+      return;
+    }
+    if (!verified) {
+      showToast('The certificate needs a matching earned quiz achievement.', 'warning');
       return;
     }
     certificatePreviewId = certificate.id;
@@ -2400,8 +3070,12 @@ document.addEventListener('click', event => {
       entry.quizId === certificate.quizId && entry.date === certificate.completionDate &&
       entry.total > 0 && entry.correct === entry.total
     );
-    if (!hasActivePremiumMembership() || !verified) {
-      showToast('The certificate needs an eligible demo plan and a matching earned quiz achievement.', 'warning');
+    if (!membershipAccess('premiumCertificate').allowed) {
+      openMembershipGate('premiumCertificate');
+      return;
+    }
+    if (!verified) {
+      showToast('The certificate needs a matching earned quiz achievement.', 'warning');
       return;
     }
     certificatePreviewId = certificate.id;
@@ -2424,7 +3098,10 @@ document.addEventListener('click', event => {
     }
     if (!saveDemoMembership(selectedPremiumPlan)) return;
     demoCheckoutOpen = false;
-    render();
+    const returnPage = membershipReturnPage;
+    membershipReturnPage = null;
+    if (returnPage) navigate(returnPage);
+    else render();
     showToast(`Atlas Plus ${selectedPremiumPlan} demo access is active until ${formatMembershipDate(state.profile.membershipExpiresAt)}. No payment was made.`, 'success');
     return;
   }
@@ -2468,6 +3145,27 @@ document.addEventListener('click', event => {
   if (event.target.closest('[data-auth-switch]')) { authMode = authMode === 'signin' ? 'signup' : 'signin'; render(); return; }
   if (event.target.closest('[data-forgot-password]')) { showToast('Password reset needs a secure authentication provider; none is configured.', 'warning'); return; }
   if (event.target.closest('[data-upgrade]')) { showToast('Membership payments and activation are not configured. No payment information was collected.', 'warning'); }
+});
+
+document.addEventListener('keydown', event => {
+  if (!membershipGate) return;
+  const root = document.getElementById('membership-gate-root');
+  if (event.key === 'Escape') {
+    closeMembershipGate();
+    return;
+  }
+  if (event.key !== 'Tab') return;
+  const controls = [...root.querySelectorAll('button:not(:disabled)')];
+  if (!controls.length) return;
+  const first = controls[0];
+  const last = controls[controls.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 });
 
 document.getElementById('mobile-menu').addEventListener('click', () => {
