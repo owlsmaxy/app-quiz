@@ -13,7 +13,20 @@ const icons = {
   bolt: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-9 12h7l-1 8 10-13h-7l1-7Z"/></svg>',
   trophy: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8m-4-4v4m-6-18h12v5a6 6 0 0 1-12 0V3Zm0 3H3v2a4 4 0 0 0 4 4m10-6h4v2a4 4 0 0 1-4 4"/></svg>',
   check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>',
-  lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/></svg>'
+  lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/></svg>',
+  book: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A1.5 1.5 0 0 1 5.5 18h13A1.5 1.5 0 0 1 20 19.5A1.5 1.5 0 0 1 18.5 21H15.5V4H8.5V21H5.5A1.5 1.5 0 0 1 4 19.5ZM8.5 5.5A1.5 1.5 0 0 0 7 7H5.5A1.5 1.5 0 0 0 4 8.5V19.5A1.5 1.5 0 0 0 5.5 21H7A1.5 1.5 0 0 0 8.5 19.5V14H16V19.5A1.5 1.5 0 0 0 17.5 21H19A1.5 1.5 0 0 0 20.5 19.5V8.5A1.5 1.5 0 0 0 19 7H17.5A1.5 1.5 0 0 0 16 5.5Z"/></svg>',
+  sparkles: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3L13 7H17L14.5 9.5L12 11L9.5 9.5L7 7H11L13 3M12 17L13 21H17L14.5 18.5L12 17ZM12 13L13 17H17L14.5 14.5L12 13ZM12 7L13 11H17L14.5 8.5L12 7Z"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15V18c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h14c1.1 0 2 .9 2 2v9zM2 8V5c0-.6.4-1 1-1h16c.6 0 1 .4 1 1v14c0 .6-.4 1-1 1H3c-.6 0-1-.4-1-1V8z"/></svg>',
+  filter: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM3 12c0-1.1.9-2 2-2h14c1.1 0 2 .9 2 2v6H3z"/></svg>',
+  trophy: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8m-4-4v4m-6-18h12v5a6 6 0 0 1-12 0V3Zm0 3H3v2a4 4 0 0 0 4 4m10-6h4v2a4 4 0 0 1-4 4"/></svg>',
+  sparkles: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3L13 7H17L14.5 9.5L12 11L9.5 9.5L7 7H11L13 3M12 17L13 21H17L14.5 18.5L12 17ZM12 13L13 17H17L14.5 14.5L12 13ZM12 7L13 11H17L14.5 8.5L12 7Z"/></svg>',
+  sparkle: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c-3.68 0-5.56 1.16-6.82 2.88C4.26 6.26 3 7.82 3 9.5S4.26 12.74 6.82 14.12C8.08 15.84 9.96 17 12 17s3.92-1.16 5.18-2.88C19.74 12.74 21 11.18 21 9.5s-1.26-3.24-3.82-4.62C17.56 3.16 15.68 2 12 2Zm0 14c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3Zm0-10c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3Z"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6m4 6v4m-6-4h6M14 4v6m0 0h6m-6 0v6m-6-4V4m0 0h6M4 20h16"/></svg>',
+  certificate: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H8ZM7 4h10a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM7 4V2h10v2M17 4h2M17 4v2M7 4H5M5 4v2"/></svg>',
+  help: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 12H9v2h2v-2zM12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z"/></svg>',
+  arrowRight: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-7-7 7 7-7 7"/></svg>',
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
+  target: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>'
 };
 
 const categories = [
@@ -90,9 +103,16 @@ const quizzes = [
 ];
 
 const navItems = [
-  ['home', 'Home', 'home'], ['explore', 'Explore quizzes', 'explore'], ['categories', 'Categories', 'categories'], ['learn', 'Learn', 'explore'], ['quiz-builder', 'Quiz studio', 'explore'], ['analytics', 'Analytics', 'leaderboard'],
-  ['premium', 'Premium', 'premium'], ['plus', 'Atlas Plus', 'premium'], ['rewards', 'Rewards', 'rewards'], ['leaderboard', 'Leaderboard', 'leaderboard'],
-  ['profile', 'My profile', 'profile'], ['settings', 'Settings', 'settings'], ['auth', 'Sign in / sign up', 'profile']
+  ['home', 'Home', 'home'],
+  ['explore-subjects', 'Explore Subjects', 'book'],
+  ['explore', 'Quizzes', 'play'],
+  ['ai-chat', 'AI Tutor', 'sparkles'],
+  ['analytics', 'My Progress', 'chart'],
+  ['rewards', 'Achievements', 'trophy'],
+  ['certificates', 'Certificates', 'certificate'],
+  ['premium', 'Premium', 'premium'],
+  ['settings', 'Settings', 'settings'],
+  ['help', 'Help & Support', 'help']
 ];
 const storageKey = 'atlas-learn-demo-v1';
 const membershipConfig = {
@@ -310,6 +330,21 @@ let bankQuestionManagerOpen = false;
 let timerId = null;
 let selectedCategory = 'all';
 let searchQuery = '';
+
+// Subject discovery and AI state
+let activeSubjectId = '';
+let activeTopicId = '';
+let activeSubtopicId = '';
+let activeLessonId = '';
+let subjectSearchQuery = '';
+let topicSearchQuery = '';
+let universalSearchQuery = '';
+let aiChatOpen = false;
+let aiConversation = [];
+let aiLevel = 'intermediate';
+let aiPending = false;
+let aiLastError = null;
+let askAtlasContext = null; // { kind: 'quiz'|'topic'|'lesson', question, context, level }
 let analyticsFilters = { levelId: 'all', subjectId: 'all', topicId: 'all', range: '30' };
 let leaderboardPeriod = 'weekly';
 let leaderboardCategory = 'all';
@@ -789,76 +824,176 @@ function dashboardPage() {
     : null;
   const elapsedSeconds = totalLearningSeconds();
   const certificates = state.history.filter(entry => entry.total > 0 && entry.correct === entry.total);
-  const trend = activityTrend(state.history);
-  const trendHasActivity = trend.some(day => day.sessions);
-  const trendAverage = trend.filter(day => day.score !== null).reduce((sum, day, _, days) => sum + day.score / days.length, 0);
-  const bestTrendScore = trend.filter(day => day.score !== null).reduce((best, day) => Math.max(best, day.score), 0);
-  const displayTrend = trend.map(day => {
-    const height = day.score ?? 0;
-    return `<div class="learning-trend-day" title="${day.key}: ${day.sessions ? `${day.score}% average across ${day.sessions} quiz${day.sessions === 1 ? '' : 'zes'}` : 'No quizzes recorded'}">
-      <div class="learning-trend-bar-wrap"><span class="learning-trend-bar ${day.sessions ? '' : 'no-activity'}" style="height:${height}%"></span></div>
-      <span>${day.label}</span>${day.sessions ? `<small>${day.score}%</small>` : '<small>—</small>'}
-    </div>`;
-  }).join('');
-  const contextLine = education.label
-    ? `<strong>${escapeHTML(education.label)}</strong><span>${escapeHTML(education.pathway?.name || education.programme?.name || education.curriculum?.name || 'Learning path')}</span>`
-    : '<strong>Your learning path</strong><span>Choose an education level to personalize your progress.</span>';
-  const subjectProgress = progress?.subjects.length
-    ? progress.subjects.map(subject => {
-      const completed = progress.topics.filter(({ subject: current, topic }) =>
-        current.id === subject.id && state.topicCompletions.some(item =>
-          item.contextKey === completionContextKey(educationPreferences().countryId, educationPreferences().curriculumId,
-            educationPreferences().levelId, educationPreferences().gradeId, subject.id, topic.id))
-      ).length;
-      const percent = subject.topics.length ? Math.round(completed / subject.topics.length * 100) : 0;
-      return `<div class="dashboard-subject-progress"><div><strong>${escapeHTML(subject.name)}</strong><span>${completed} of ${subject.topics.length} topics</span></div><div class="dashboard-progress-track" role="progressbar" aria-label="${escapeHTML(subject.name)} topic progress" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100"><span style="width:${percent}%"></span></div></div>`;
-    }).join('')
-    : '<div class="analytics-empty compact"><strong>Your learning path starts here</strong><span>Select your level, grade or programme to see relevant subject progress.</span><button type="button" class="secondary-button" data-page="learn">Browse learning library</button></div>';
-  const topicContinue = latestTopic
-    ? `<div class="dashboard-continue"><span class="dashboard-continue-icon" aria-hidden="true">📖</span><div><strong>Continue ${escapeHTML(AtlasEducation.getById(AtlasEducation.grades, latestTopic.gradeId)?.name || 'learning')}</strong><span>${escapeHTML(latestTopic.title)} · ${formatDate(latestTopic.completedAt)}</span></div><button type="button" class="secondary-button" data-continue-topic="${escapeHTML(latestTopic.contextKey)}">Continue ${icons.arrow}</button></div>`
-    : `<div class="analytics-empty compact"><strong>No learning topics completed yet</strong><span>Finish a topic-based practice session and your progress will appear here.</span><button type="button" class="secondary-button" data-page="quiz-builder">Build a practice quiz</button></div>`;
+  const streak = currentLearningStreak();
+  const allSubjects = SubjectCatalogue.allSubjects();
+  const topSubjects = allSubjects.slice(0, 8);
+  const topTopics = [];
+  for (const subject of allSubjects.slice(0, 4)) {
+    for (const spec of subject.specializations || []) {
+      for (const course of spec.courses || []) {
+        for (const topic of course.subtopics || []) {
+          topTopics.push({ ...topic, subjectName: subject.name, subjectIcon: subject.icon });
+          if (topTopics.length >= 6) break;
+        }
+        if (topTopics.length >= 6) break;
+      }
+      if (topTopics.length >= 6) break;
+    }
+    if (topTopics.length >= 6) break;
+  }
+  const topicProgressPercent = progress ? Math.round((progress.completedCount / Math.max(1, progress.topics.length)) * 100) : 0;
+  const isPremium = hasActivePremiumMembership();
   return `
-    <section class="welcome-banner">
-      <div class="welcome-copy">
-        <div class="welcome-label"><span>✦</span> YOUR PERSONAL LEARNING SPACE</div>
+    <section class="hero-section" aria-label="Welcome">
+      <div class="hero-copy">
+        <div class="hero-label"><span>${icons.sparkle}</span> WELCOME TO ATLAS LEARN</div>
         <h1>Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${firstName}.</h1>
         <p>${education.label ? `Your learning journey in ${escapeHTML(education.label)} is taking shape.` : 'A clear view of your learning, progress and next steps starts here.'}</p>
-        <button type="button" class="primary-button" data-start-quiz="${recommendation.id}">Start ${escapeHTML(recommendation.title)} ${icons.arrow}</button>
+        <div class="hero-actions">
+          <button type="button" class="primary-button" data-start-quiz="${recommendation.id}">Start Learning ${icons.arrowRight}</button>
+          <button type="button" class="outline-button" data-page="explore-subjects">Explore Subjects ${icons.arrowRight}</button>
+        </div>
       </div>
-      <div class="banner-art" aria-hidden="true"><span class="orbit"></span><span class="float-token one">✦</span><span class="float-token two">✓</span><span class="float-token three">•</span><span class="book-illustration"><svg viewBox="0 0 48 48"><path d="M8 11c7-2 12-.5 16 3 4-3.5 9-5 16-3v24c-7-2-12-.5-16 3-4-3.5-9-5-16-3V11Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M24 14v24M13 18c3-.5 6 0 8 1.5M13 24c3-.5 6 0 8 1.5m14-7c-3-.5-6 0-8 1.5m8 4.5c-3-.5-6 0-8 1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span></div>
-    </section>
-    <section class="dashboard-learning-context" aria-label="Current learning path">
-      <span class="dashboard-context-icon" aria-hidden="true">⌖</span><div><div class="eyebrow">YOUR LEARNING PATH</div>${contextLine}</div>
-      <button type="button" class="text-button" data-page="settings">Update preferences ${icons.arrow}</button>
+      <div class="hero-art" aria-hidden="true">
+        <div class="hero-globe">
+          <span class="globe-icon">🌍</span>
+          <span class="globe-ring r1"></span>
+          <span class="globe-ring r2"></span>
+          <span class="globe-ring r3"></span>
+          <div class="globe-dots" id="globe-dots"></div>
+        </div>
+        <div class="academic-shapes">
+          <span class="shape s1"></span>
+          <span class="shape s2"></span>
+          <span class="shape s3"></span>
+        </div>
+      </div>
     </section>
     <section class="stat-grid dashboard-stat-grid" aria-label="Learning overview">
-      ${statCard('trophy', 'coral', 'Quizzes attempted', state.stats.quizzes, `${state.history.length} score${state.history.length === 1 ? '' : 's'} in recent history`)}
-      ${statCard('check', 'mint', 'Average score', average === null ? '—' : `${average}%`, average === null ? 'Complete a quiz to get started' : `Across ${state.history.length} recorded quizzes`)}
-      ${statCard('clock', 'blue', 'Learning time', elapsedSeconds ? formatLearningDuration(elapsedSeconds) : '—', elapsedSeconds ? 'Time in completed quiz sessions' : 'Tracked from your next quiz')}
-      ${statCard('explore', 'violet', 'Topics completed', state.topicCompletions.length, 'Unique topics from completed sessions')}
-      ${statCard('bolt', 'coral', 'Current streak', `${currentLearningStreak()} ${currentLearningStreak() === 1 ? 'day' : 'days'}`, currentLearningStreak() ? 'Based on recorded daily activity' : 'Complete a quiz today to begin')}
+      ${statCard('play', 'purple', 'Quizzes attempted', state.stats.quizzes, `${state.history.length} score${state.history.length === 1 ? '' : 's'} recorded`)}
+      ${statCard('target', 'blue', 'Average score', average === null ? '—' : `${average}%`, average === null ? 'Complete a quiz to get started' : `Across ${state.history.length} quizzes`)}
+      ${statCard('clock', 'green', 'Learning time', elapsedSeconds ? formatLearningDuration(elapsedSeconds) : '—', elapsedSeconds ? 'Time in completed sessions' : 'Tracked from your next quiz') }
+      ${statCard('chart', 'orange', 'Topics completed', state.topicCompletions.length, 'Unique topics mastered')}
     </section>
-    <section class="dashboard-grid dashboard-analytics-grid">
-      <article class="section-card dashboard-trend-card"><div class="section-heading"><div><h2>Performance this week</h2><p>${trendHasActivity ? `Average ${Math.round(trendAverage)}% · Best day ${bestTrendScore}%` : 'Quiz scores will appear after your first session.'}</p></div><button class="text-button" type="button" data-page="analytics">View analytics ${icons.arrow}</button></div>
-        ${trendHasActivity ? `<div class="learning-trend-chart" role="img" aria-label="Daily quiz scores over the last seven days">${displayTrend}</div>${state.history.length < 2 ? '<p class="analytics-footnote">Complete another quiz to start seeing a performance trend.</p>' : ''}` : '<div class="analytics-empty compact"><span>No quiz activity recorded in the last seven days.</span><button type="button" class="secondary-button" data-start-quiz="${recommendation.id}">Start a quiz ${icons.arrow}</button></div>'}
+    <section class="dashboard-grid dashboard-main-grid">
+      <article class="section-card dashboard-subjects-card" style="grid-column: 1 / -1;">
+        <div class="section-heading">
+          <div><h2>Explore Subjects</h2><p>Browse the global catalogue across every education level.</p></div>
+          <button type="button" class="text-button" data-page="explore-subjects">View All ${icons.arrowRight}</button>
+        </div>
+        <div class="subjects-grid">
+          ${topSubjects.map(subject => subjectCardMarkup(subject)).join('')}
+        </div>
       </article>
-      <article class="section-card dashboard-progress-card"><div class="section-heading"><div><h2>Subject progress</h2><p>${progress ? `${progress.completedCount} of ${progress.topics.length} topics completed in ${escapeHTML(education.grade?.name || education.programme?.name || 'your selected grade')}` : 'Progress follows your selected education path.'}</p></div><button type="button" class="text-button" data-page="learn">Explore learning ${icons.arrow}</button></div>
-        ${subjectProgress}${progress?.completedCount ? `<div class="dashboard-overall-progress"><span>Grade or programme progress</span><strong>${progress.completedCount}/${progress.topics.length} topics · ${progress.percent}%</strong><div class="dashboard-progress-track" role="progressbar" aria-label="Overall topic completion" aria-valuenow="${progress.percent}" aria-valuemin="0" aria-valuemax="100"><span style="width:${progress.percent}%"></span></div></div>` : ''}
+      <article class="section-card dashboard-ai-card">
+        <div class="ai-assistant-card">
+          <div class="ai-assistant-header">
+            <span class="ai-icon">${icons.sparkles}</span>
+            <h3>AI Learning Assistant</h3>
+            <span class="ai-status">Demo Mode</span>
+          </div>
+          <p>Stuck on a question? Ask Atlas AI for help with explanations, hints, step-by-step solutions and follow-up questions.</p>
+          <div class="ai-features">
+            <div class="ai-feature">${icons.arrowRight} Explain questions you don't understand</div>
+            <div class="ai-feature">${icons.arrowRight} Get hints before revealing the answer</div>
+            <div class="ai-feature">${icons.arrowRight} Step-by-step problem solving</div>
+            <div class="ai-feature">${icons.arrowRight} Continue with follow-up questions</div>
+          </div>
+          <button type="button" class="primary-button ai-open-btn" data-page="ai-chat">Ask Atlas AI ${icons.arrowRight}</button>
+          <div class="ai-illustration">${icons.target}</div>
+        </div>
+      </article>
+      <article class="section-card dashboard-progress-card">
+        <div class="section-heading">
+          <div><h2>Learning Progress</h2><p>Your overall completion across all subjects.</p></div>
+          <span class="progress-badge">${isPremium ? 'Premium Member' : 'Free Member'}</span>
+        </div>
+        <div class="progress-stats">
+          <div class="progress-stat"><span class="stat-label">Quizzes</span><span class="stat-value">${state.stats.quizzes}</span><span class="stat-sub">attempted</span></div>
+          <div class="progress-stat"><span class="stat-label">Topics</span><span class="stat-value">${state.topicCompletions.length}</span><span class="stat-sub">completed</span></div>
+          <div class="progress-stat"><span class="stat-label">Streak</span><span class="stat-value">${streak}</span><span class="stat-sub">days</span></div>
+        </div>
+        <div class="circular-progress" role="progressbar" aria-label="Overall progress" aria-valuenow="${topicProgressPercent}" aria-valuemin="0" aria-valuemax="100">
+          <svg viewBox="0 0 120 120">
+            <circle class="bg" cx="60" cy="60" r="45"></circle>
+            <circle class="ring" cx="60" cy="60" r="45" style="stroke-dashoffset: ${283 - (283 * topicProgressPercent) / 100}"></circle>
+          </svg>
+          <div class="circular-content"><div class="circular-value">${topicProgressPercent}%<small>complete</small></div></div>
+        </div>
+        <div class="progress-chart">
+          ${['Quizzes', 'Topics', 'Streak'].map((label, index) => {
+            const value = index === 0 ? state.stats.quizzes : index === 1 ? state.topicCompletions.length : streak;
+            const max = Math.max(10, value * 1.5);
+            const pct = Math.min(100, Math.round((value / max) * 100));
+            const tone = index === 0 ? 'cyan' : index === 1 ? 'purple' : 'green';
+            return `<div class="progress-bar ${tone}" style="height:${pct}%"><span class="progress-bar-label">${label}</span></div>`;
+          }).join('')}
+        </div>
+      </article>
+      <article class="section-card dashboard-topics-card">
+        <div class="section-heading">
+          <div><h2>Popular Topics</h2><p>Trending topics across the catalogue.</p></div>
+          <button type="button" class="text-button" data-page="search">View All ${icons.arrowRight}</button>
+        </div>
+        <div class="topics-grid">
+          ${topTopics.map((topic, index) => topicCardMarkup(topic, index + 1)).join('')}
+        </div>
       </article>
     </section>
-    <section class="section-card dashboard-continue-card"><div class="section-heading"><div><h2>Continue learning</h2><p>Pick up from your most recently completed topic.</p></div></div>${topicContinue}</section>
-    <section class="bottom-grid dashboard-bottom-grid">
-      <div class="section-card"><div class="section-heading"><div><h2>Recent activity</h2><p>Your latest completed learning sessions.</p></div><button class="text-button" type="button" data-page="analytics">Full history ${icons.arrow}</button></div>${historyMarkup(5)}</div>
-      <div class="section-card"><div class="section-heading"><div><h2>Achievements</h2><p>${earnedAchievements.length} earned · based on your activity</p></div><button class="text-button" type="button" data-page="rewards">View all ${icons.arrow}</button></div>
-        ${earnedAchievements.length ? `<div class="dashboard-achievement-row">${earnedAchievements.slice(0, 3).map(item => `<span title="${escapeHTML(item.name)}">${item.icon}</span>`).join('')}<div><strong>${escapeHTML(earnedAchievements[0].name)}</strong><small>Unlocked ${formatDate(earnedAchievements[0].earnedAt)}</small></div></div>` : `<div class="analytics-empty compact"><span>${escapeHTML(nextAchievement?.description || 'Complete a learning activity to earn an achievement.')}</span></div>`}
-        ${nextAchievement ? `<div class="next-achievement"><span class="achievement-lock">${nextAchievement.icon}</span><div><strong>Next: ${escapeHTML(nextAchievement.name)}</strong><span>${escapeHTML(nextAchievement.description)}</span></div></div>` : ''}
-      </div>
-    </section>
-    ${certificates.length ? `<section class="dashboard-certificate-card"><div class="dashboard-certificate-icon" aria-hidden="true">🎓</div><div><div class="eyebrow">PERFECT SCORE ACHIEVEMENT</div><h2>Your learning milestone is certificate-eligible</h2><p>${certificates.length} perfect-score quiz${certificates.length === 1 ? '' : 'zes'} recorded. Certificates are issued by Atlas Learn and are not official accreditation.</p></div><button type="button" class="${hasActivePremiumMembership() ? 'primary-button' : 'secondary-button'}" ${hasActivePremiumMembership() ? 'data-page="premium"' : 'data-membership-feature="premiumCertificate"'}>${hasActivePremiumMembership() ? 'Open certificates' : 'Explore certificate benefits'} ${icons.arrow}</button></section>` : ''}
-    <section class="dashboard-recommendation"><div><div class="eyebrow">RECOMMENDED NEXT</div><h2>${escapeHTML(recommendation.title)}</h2><p>${escapeHTML(recommendation.description)}</p></div><button type="button" class="secondary-button" data-start-quiz="${recommendation.id}">Start this quiz ${icons.arrow}</button></section>
-    ${hasActivePremiumMembership() ? `<button type="button" class="dashboard-analytics-upgrade" data-page="analytics">Open your Premium learning report ${icons.arrow}</button>` : `<button type="button" class="dashboard-analytics-upgrade" data-membership-feature="advancedAnalytics">Unlock detailed Premium analytics ${icons.arrow}</button>`}
-    <div class="dashboard-weekly-activity"><span>This week</span><strong>${completedThisWeek} quiz${completedThisWeek === 1 ? '' : 'zes'} completed</strong><div class="goal-progress"><span style="width:${Math.min(100, completedThisWeek / 3 * 100)}%"></span></div><small>${Math.min(completedThisWeek, 3)} / 3 toward your weekly goal</small></div>
+    ${certificates.length ? `<section class="dashboard-certificate-card"><div class="dashboard-certificate-icon" aria-hidden="true">🎓</div><div><div class="eyebrow">PERFECT SCORE ACHIEVEMENT</div><h2>Your learning milestone is certificate-eligible</h2><p>${certificates.length} perfect-score quiz${certificates.length === 1 ? '' : 'zes'} recorded. Certificates are issued by Atlas Learn and are not official accreditation.</p></div><button type="button" class="${isPremium ? 'primary-button' : 'secondary-button'}" ${isPremium ? 'data-page="premium"' : 'data-membership-feature="premiumCertificate"'}>${isPremium ? 'Open certificates' : 'Explore certificate benefits'} ${icons.arrowRight}</button></section>` : ''}
+    <section class="dashboard-recommendation"><div><div class="eyebrow">RECOMMENDED NEXT</div><h2>${escapeHTML(recommendation.title)}</h2><p>${escapeHTML(recommendation.description)}</p></div><button type="button" class="secondary-button" data-start-quiz="${recommendation.id}">Start this quiz ${icons.arrowRight}</button></section>
+    <div class="dashboard-weekly-activity"><span>This week</span><strong>${completedThisWeek} quiz${completedThisWeek === 1 ? '' : 'zes'} completed</strong><div class="goal-progress"><span style="width:${Math.min(100, completedThisWeek / 3 * 100)}%"></div></div><small>${Math.min(completedThisWeek, 3)} / 3 toward your weekly goal</small></div>
   `;
+}
+
+function subjectCardMarkup(subject) {
+  const iconClass = `subject-icon ${subject.icon ? subject.icon.toLowerCase().replace(/[^a-z]/g, '') : 'default'}`;
+  return `<article class="subject-card" data-open-subject="${escapeHTML(subject.id)}" aria-label="Open ${escapeHTML(subject.name)}">
+    <span class="subject-icon ${iconClass}">${subject.icon || '✦'}</span>
+    <h3>${escapeHTML(subject.name)}</h3>
+    <p>${escapeHTML(subject.description || 'Explore this subject')}</p>
+    <button type="button" class="text-button" data-open-subject="${escapeHTML(subject.id)}">Open ${icons.arrowRight}</button>
+  </article>`;
+}
+
+function topicCardMarkup(topic, rank) {
+  const iconClass = `topic-icon ${topic.subjectIcon ? topic.subjectIcon.toLowerCase().replace(/[^a-z]/g, '') : 'default'}`;
+  return `<article class="topic-card" data-open-topic="${escapeHTML(topic.id)}" aria-label="Open ${escapeHTML(topic.name)}">
+    <span class="topic-rank">#${rank}</span>
+    <span class="topic-icon ${iconClass}">${topic.subjectIcon || '✦'}</span>
+    <h4>${escapeHTML(topic.name)}</h4>
+    <p>${escapeHTML(topic.description || 'Explore this topic')}</p>
+    <span class="topic-meta">${topic.subjectName} · ${topic.lessons ? topic.lessons.length : 0} lessons</span>
+  </article>`;
+}
+
+function certificatesPage() {
+  const certs = state.certificates;
+  return `${pageHeading('YOUR CERTIFICATES', 'Certificates', 'Perfect-score quiz certificates issued by Atlas Learn.', '')}
+    <section class="certificate-list">
+      ${certs.length ? certs.map(cert => `<article class="certificate-row"><div class="certificate-icon">🎓</div><div class="certificate-copy"><strong>${escapeHTML(cert.title)}</strong><span>${escapeHTML(cert.course || cert.quizId)}</span></div><span class="certificate-date">${formatDate(cert.completionDate)}</span><button type="button" class="text-button" data-cert-id="${escapeHTML(cert.id)}">View ${icons.arrowRight}</button></article>`).join('') : '<div class="empty-state"><div class="empty-icon">🎓</div><h3>No certificates yet</h3><p>Earn a perfect score on any quiz to unlock a certificate.</p></div>'} 
+    </section>`;
+}
+
+function helpPage() {
+  return `${pageHeading('HELP & SUPPORT', 'Help & Support', 'Get assistance with Atlas Learn.', '')}
+    <section class="help-grid">
+      <article class="help-card"><h3>FAQ</h3><p>Common questions about quizzes, progress and membership.</p><button type="button" class="text-button">View FAQ ${icons.arrowRight}</button></article>
+      <article class="help-card"><h3>Contact</h3><p>Reach out to the Atlas Learn support team.</p><button type="button" class="text-button">Contact Support ${icons.arrowRight}</button></article>
+      <article class="help-card"><h3>Demo Mode</h3><p>Atlas Learn runs in local demo mode. No data is sent to a server.</p><button type="button" class="text-button">Learn More ${icons.arrowRight}</button></article>
+    </section>`;
+}
+
+function globeDots() {
+  const dots = [];
+  for (let i = 0; i < 24; i++) {
+    const angle = (i / 24) * Math.PI * 2;
+    const x = 50 + Math.cos(angle) * 42;
+    const y = 50 + Math.sin(angle) * 42;
+    const delay = i * 0.15;
+    dots.push(`<span class="globe-dot" style="left:${x}%;top:${y}%;animation-delay:${delay}s"></span>`);
+  }
+  return dots.join('');
 }
 
 function quizCard(quiz) {
@@ -1878,7 +2013,7 @@ function quizPage() {
         return `<button type="button" class="answer-option ${klass}" data-answer="${index}" ${answered ? 'disabled' : ''}><span class="answer-key">${String.fromCharCode(65 + index)}</span><span>${escapeHTML(option)}</span></button>`;
       }).join('')}</div>
       <div class="answer-explanation ${quizSession.selected !== null ? `visible ${quizSession.selected === question.answer ? '' : 'wrong'}` : ''}" id="answer-explanation">${quizSession.selected === question.answer ? 'That’s right! ' : 'Not quite. '} ${escapeHTML(question.explanation)}</div>
-      <div class="quiz-controls"><button type="button" class="secondary-button" data-quiz-back ${quizSession.current === 0 ? 'disabled' : ''}>Previous</button><button type="button" class="primary-button" data-quiz-next ${quizSession.selected === null ? 'disabled' : ''}>${quizSession.current === quizSession.questions.length - 1 ? 'See results' : 'Next question'} ${icons.arrow}</button></div>
+      <div class="quiz-controls"><button type="button" class="secondary-button" data-quiz-back ${quizSession.current === 0 ? 'disabled' : ''}>Previous</button><button type="button" class="secondary-button" data-ask-atlas-quiz>Ask Atlas AI ${icons.chat}</button><button type="button" class="primary-button" data-quiz-next ${quizSession.selected === null ? 'disabled' : ''}>${quizSession.current === quizSession.questions.length - 1 ? 'See results' : 'Next question'} ${icons.arrow}</button></div>
     </section></div>`;
 }
 function formatTimer(seconds) {
@@ -2282,7 +2417,7 @@ function authPage() {
     <div class="auth-switch"><button type="button" data-page="home">Continue as guest</button></div></section>`;
 }
 
-const pageLabels = { home: 'Home', explore: 'Explore quizzes', categories: 'Categories', learn: 'Learn', 'quiz-builder': 'Quiz studio', analytics: 'Learning analytics', premium: 'Premium', plus: 'Atlas Plus', rewards: 'Rewards', leaderboard: 'Leaderboard', profile: 'My profile', settings: 'Settings', auth: 'Demo profile', quiz: 'Quiz session', verify: 'Certificate verification' };
+const pageLabels = { home: 'Home', 'explore-subjects': 'Explore Subjects', explore: 'Quizzes', 'ai-chat': 'AI Tutor', analytics: 'My Progress', rewards: 'Achievements', certificates: 'Certificates', premium: 'Premium', settings: 'Settings', help: 'Help & Support', categories: 'Categories', 'quiz-builder': 'Quiz studio', plus: 'Atlas Plus', leaderboard: 'Leaderboard', profile: 'My profile', auth: 'Demo profile', quiz: 'Quiz session', verify: 'Certificate verification' };
 function navigate(page) {
   if (timerId && page !== 'quiz') window.clearInterval(timerId);
   if (activePage === 'premium' && page !== 'premium') membershipReturnPage = null;
@@ -2311,9 +2446,10 @@ function render() {
   const page = {
     home: dashboardPage, explore: explorePage, categories: categoriesPage, learn: educationPage, 'quiz-builder': quizBuilderPage, analytics: analyticsPage, premium: premiumPage, plus: plusDashboardPage,
     rewards: rewardsPage, leaderboard: leaderboardPage, profile: profilePage, settings: settingsPage,
-    auth: authPage, quiz: quizPage, verify: verifyCertificatePage
+    auth: authPage, quiz: quizPage, verify: verifyCertificatePage, 'explore-subjects': exploreSubjectsPage, search: searchPage, topic: topicPage, 'ai-chat': aiChatPage, certificates: certificatesPage, help: helpPage
   }[activePage] || dashboardPage;
   main.innerHTML = page();
+  document.getElementById('globe-dots')?.insertAdjacentHTML('beforeend', globeDots());
   bindPageInteractions();
   document.title = `${pageLabels[activePage] || 'Home'} · Atlas Learn`;
   scheduleMembershipExpiry();
@@ -2437,6 +2573,89 @@ function premiumPage() {
       }</div></section>
     ${previewCertificate && earnedPerfectQuiz() && hasActivePremiumMembership() ? `<section class="certificate-preview-section" aria-label="Certificate preview"><div class="certificate-preview-toolbar"><div><div class="eyebrow">CERTIFICATE PREVIEW</div><h2>Ready to celebrate?</h2></div><button type="button" class="text-button" data-close-certificate-preview>Close preview</button></div>${certificateMarkup(previewCertificate)}<div class="certificate-preview-footer"><span>Print this preview and choose <strong>Save as PDF</strong> in your browser’s print dialog.</span><button type="button" class="primary-button" data-print-certificate="${escapeHTML(previewCertificate.id)}">Print / save as PDF ${icons.arrow}</button></div></section>` : ''}
     <div class="future-note"><strong>Demo membership only.</strong> This experience does not process payments or create a real subscription. A production checkout requires a trusted payment provider and server-side membership verification.</div>`;
+}
+
+function subjectCard(subject, discipline) {
+  const bookmarked = SubjectCatalogue.isBookmarked(subject.id, 'subject');
+  return `<article class="subject-card" tabindex="0" role="button" data-open-subject="${escapeHTML(subject.id)}" aria-label="Explore ${subject.name}">
+    <span class="subject-card-icon">${subject.icon || '📘'}</span>
+    <div class="subject-card-copy"><strong>${escapeHTML(subject.name)}</strong><span>${escapeHTML(subject.description)}</span><span class="subject-card-level">${escapeHTML(SubjectCatalogue.levelLabels[subject.level] || subject.level)}</span></div>
+    <span class="subject-card-action">${bookmarked ? '✓ Saved' : 'Save'}</span>
+  </article>`;
+}
+
+function exploreSubjectsPage() {
+  const catalogue = SubjectCatalogue.allDisciplines();
+  const query = subjectSearchQuery.trim().toLocaleLowerCase();
+  const filtered = catalogue.filter(discipline => {
+    const match = !query || `${discipline.name} ${discipline.description}`.toLocaleLowerCase().includes(query);
+    return match;
+  });
+  return `${pageHeading('DISCOVER EVERY SUBJECT', 'Explore subjects', 'Browse the global catalogue across every education level, from PP1 to postgraduate and independent study.', '<div class="heading-actions"><button type="button" class="secondary-button" data-page="search">Universal search</button></div>')}
+    <label class="search-box">${icons.search}<input id="subject-search" type="search" value="${escapeHTML(subjectSearchQuery)}" placeholder="Search subjects and disciplines..." aria-label="Search subjects"></label>
+    <div class="filter-bar">${SubjectCatalogue.defaultLevelOrder.map(levelId => `<button class="filter-chip ${'all' === 'all' ? 'active' : ''}" data-level-filter="${escapeHTML(levelId)}">${SubjectCatalogue.levelIcon[levelId] || '✦'} ${SubjectCatalogue.levelLabels[levelId] || levelId}</button>`).join('')}</div>
+    <div class="discipline-grid">${filtered.map(discipline => {
+      const subjects = discipline.subjects || [];
+      const match = !query || `${discipline.name} ${discipline.description}`.toLocaleLowerCase().includes(query);
+      const visibleSubjects = query ? subjects.filter(s => `${s.name} ${s.description}`.toLocaleLowerCase().includes(query)) : subjects;
+      return `<section class="discipline-section"><div class="discipline-header"><h2>${escapeHTML(discipline.name)}</h2><p>${escapeHTML(discipline.description)}</p></div><div class="subject-grid">${visibleSubjects.map(subject => subjectCard(subject, discipline)).join('')}${visibleSubjects.length === 0 && match ? '<div class="empty-state compact"><p>No subjects match your search.</p></div>' : ''}</div></section>`;
+    }).join('')}</div>
+    ${filtered.length === 0 ? '<div class="empty-state"><div class="empty-icon">🔎</div><h3>No disciplines found</h3><p>Try another search term.</p></div>' : ''}`;
+}
+
+function searchPage() {
+  const query = universalSearchQuery.trim();
+  const results = query ? SubjectCatalogue.searchCatalogue(query, { limit: 40 }) : { subjects: [], topics: [], lessons: [], suggestions: [] };
+  const history = SubjectCatalogue.getSearchHistory();
+  const recent = SubjectCatalogue.getRecentSearches();
+  return `${pageHeading('UNIVERSAL SEARCH', 'Search everything', 'Find any subject, topic, concept or learning material across the entire catalogue.', '')}
+    <div class="search-hero"><label class="search-box search-hero-box">${icons.search}<input id="universal-search" type="search" value="${escapeHTML(universalSearchQuery)}" placeholder="Search for any subject, topic or concept..." aria-label="Universal search"></label>${query ? `<button class="secondary-button" data-clear-universal-search>Clear</button>` : ''}</div>
+    ${query ? `<div class="search-results">
+      ${results.subjects.length ? `<section class="search-section"><h3>Subjects</h3><div class="search-subject-list">${results.subjects.map(subject => `<article class="search-result-item" data-open-subject="${escapeHTML(subject.id)}"><strong>${escapeHTML(subject.name)}</strong><span>${escapeHTML(SubjectCatalogue.levelLabels[subject.level] || subject.level)} · ${escapeHTML(subject.description)}</span></article>`).join('')}</div></section>` : ''}
+      ${results.topics.length ? `<section class="search-section"><h3>Topics</h3><div class="search-topic-list">${results.topics.map(topic => `<article class="search-result-item" data-open-topic="${escapeHTML(topic.id)}"><strong>${escapeHTML(topic.name)}</strong><span>${escapeHTML(topic.subjectName)} · ${escapeHTML(topic.courseName)}</span></article>`).join('')}</div></section>` : ''}
+      ${results.lessons.length ? `<section class="search-section"><h3>Lessons</h3><div class="search-lesson-list">${results.lessons.map(lesson => `<article class="search-result-item" data-open-lesson="${escapeHTML(lesson.id)}"><strong>${escapeHTML(lesson.title)}</strong><span>${escapeHTML(lesson.topicName)} · ${escapeHTML(lesson.subjectName)}</span></article>`).join('')}</div></section>` : ''}
+      ${!results.subjects.length && !results.topics.length && !results.lessons.length ? `<div class="empty-state"><p>No verified content matches "<span>${escapeHTML(query)}</span>".</p><button class="primary-button" data-ai-discover="${escapeHTML(query)}">Ask Atlas AI to generate an outline ${icons.sparkles}</button></div>` : ''}
+    </div>` : ''}
+    ${history.length ? `<section class="search-history"><h3>Recent searches</h3><div class="search-history-list">${history.map(item => `<button class="history-chip" data-search-history="${escapeHTML(item)}">${escapeHTML(item)}</button>`).join('')}<button class="text-button" data-clear-history>Clear history</button></div></section>` : ''}
+    ${recent.length ? `<section class="search-recent"><h3>Popular this session</h3><div class="search-recent-list">${recent.map(item => `<button class="history-chip" data-search-recent="${escapeHTML(item.query)}">${escapeHTML(item.query)}</button>`).join('')}</div></section>` : ''}
+    <div class="ai-discover-note"><span>${icons.sparkles}</span><strong>AI-powered discovery:</strong> Search for a topic not in the catalogue and Atlas AI will generate a structured outline, prerequisites and a learning pathway. AI-generated content is clearly labelled and is not academically verified.</div>`;
+}
+
+function topicPage() {
+  const subject = SubjectCatalogue.getSubject(activeSubjectId);
+  const topic = activeTopicId ? SubjectCatalogue.getTopic(activeTopicId) : null;
+  if (!subject || !topic) return `<div class="empty-state"><h3>Topic unavailable</h3><p>Choose a subject and topic to continue.</p><button class="secondary-button" data-page="explore-subjects">Browse subjects ${icons.arrow}</button></div>`;
+  const subtopics = topic.subtopics || [];
+  const query = topicSearchQuery.trim().toLocaleLowerCase();
+  const visible = query ? subtopics.filter(st => `${st.name} ${st.description}`.toLocaleLowerCase().includes(query)) : subtopics;
+  const bookmarked = SubjectCatalogue.isBookmarked(topic.id, 'topic');
+  return `${pageHeading('EXPLORE TOPIC', topic.name, `${escapeHTML(subject.name)} · ${escapeHTML(SubjectCatalogue.levelLabels[subject.level] || subject.level)}`, '<div class="heading-actions"><button class="secondary-button" data-toggle-bookmark-topic>${bookmarked ? 'Unsave' : 'Save'} topic ${icons.book}</button><button class="secondary-button" data-ask-atlas-topic>Ask Atlas AI about this topic ${icons.chat}</button></div>')}
+    <label class="search-box">${icons.search}<input id="topic-search" type="search" value="${escapeHTML(topicSearchQuery)}" placeholder="Search subtopics and lessons..." aria-label="Search subtopics"></label>
+    <div class="topic-description"><strong>About this topic.</strong> ${escapeHTML(topic.description)}</div>
+    <div class="topic-subtopics">${visible.length ? visible.map(subtopic => `<article class="subtopic-card" tabindex="0" role="button" data-open-subtopic="${escapeHTML(subtopic.id)}"><span class="subtopic-number">✦</span><div><strong>${escapeHTML(subtopic.name)}</strong><p>${escapeHTML(subtopic.description)}</p></div><span class="subtopic-lessons">${subtopic.lessons ? subtopic.lessons.length : 0} lesson${subtopic.lessons ? (subtopic.lessons.length === 1 ? '' : 's') : '0'}</span><span class="subtopic-arrow">→</span></article>`).join('') : '<div class="empty-state compact"><p>No subtopics match your search.</p></div>'}</div>
+    ${!query && topic.practiceQuestions && topic.practiceQuestions.length ? `<section class="topic-practice"><h3>Practice questions</h3><div class="practice-list">${topic.practiceQuestions.map(q => `<article class="practice-item"><strong>${escapeHTML(q.prompt)}</strong><span>${escapeHTML(q.answer)}</span><small>${escapeHTML(q.explanation)}</small></article>`).join('')}</div></section>` : ''}
+    <div class="topic-verified-badge">${topic.verified !== false ? '<span>✓ Verified catalogue content</span>' : '<span style="color:var(--orange)">⚠ AI-generated suggestion · Not academically verified</span>'}</div>`;
+}
+
+function aiChatPage() {
+  return `${pageHeading('ASK ATLAS AI', 'Your learning assistant', 'Get help with questions, concepts, lessons and practice. Atlas AI is a patient tutor that explains step by step.', '<div class="heading-actions"><button class="secondary-button" data-ai-level>${aiLevel ? SubjectCatalogue.levelLabels[aiLevel] : 'Intermediate'} level ${icons.sparkles}</button></div>')}
+    <div class="ai-chat-shell">
+      <div class="ai-chat-messages" id="ai-chat-messages" aria-live="polite">
+        ${aiConversation.length ? aiConversation.map(message => aiMessageBubble(message)).join('') : `<div class="ai-welcome"><div class="ai-welcome-icon">${icons.sparkles}</div><h2>Hello, I'm Atlas AI</h2><p>I'm here to help you understand questions, concepts and lessons. You can ask me to:</p><ul class="ai-welcome-list"><li>Explain a question you don't understand</li><li>Give you a hint before revealing the answer</li><li>Explain why an answer is right or wrong</li><li>Guide you step by step through a problem</li><li>Continue a conversation with follow-up questions</li></ul><p class="ai-welcome-note">Choose your explanation level above, then type your question below.</p></div>`}
+      </div>
+      <div class="ai-chat-input-area">
+        <label class="search-box ai-search-box">${icons.chat}<input id="ai-chat-input" type="search" value="" placeholder="Ask a question about your lesson..." aria-label="Ask Atlas AI"></label>
+        <button class="primary-button" data-ai-send>Send ${icons.arrow}</button>
+      </div>
+      ${aiPending ? `<div class="ai-loading"><span>Atlas AI is thinking…</span></div>` : ''}
+      ${aiLastError ? `<div class="ai-error"><span>!</span>${escapeHTML(aiLastError)}</div>` : ''}
+    </div>
+    <div class="ai-chat-footer"><small>Atlas AI responses are AI-generated and clearly labelled. They are not academically verified. For critical academic work, consult a teacher, tutor or trusted textbook.</small></div>`;
+}
+
+function aiMessageBubble(message) {
+  const own = message.role === 'user';
+  return `<div class="ai-message ${own ? 'ai-message-own' : 'ai-message-ai'}"><div class="ai-message-bubble">${escapeHTML(message.content)}${message.aiGenerated ? `<div class="ai-badge">AI-generated · not verified</div>` : ''}</div><div class="ai-message-meta">${own ? 'You' : 'Atlas AI'} · ${new Date(message.at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></div>`;
 }
 
 function bindPageInteractions() {
@@ -2939,6 +3158,159 @@ function bindPageInteractions() {
     Object.assign(state.profile, { name: name.slice(0, 40), email: email.slice(0, 120), avatar: initials(name), signedIn: true });
     persist(); navigate('home'); showToast('Demo profile ready. No account or password was created.', 'success');
   });
+
+  const subjectSearch = document.getElementById('subject-search');
+  subjectSearch?.addEventListener('input', event => { subjectSearchQuery = event.target.value; render(); });
+
+  const universalSearch = document.getElementById('universal-search');
+  universalSearch?.addEventListener('input', event => { universalSearchQuery = event.target.value; render(); });
+
+  document.querySelectorAll('[data-open-subject]').forEach(button => button.addEventListener('click', () => {
+    activeSubjectId = button.dataset.openSubject;
+    activeTopicId = '';
+    activeSubtopicId = '';
+    activeLessonId = '';
+    navigate('explore-subjects');
+  }));
+  document.querySelectorAll('[data-open-topic]').forEach(button => button.addEventListener('click', () => {
+    const subject = SubjectCatalogue.allSubjects().find(s => s.name === button.closest('.search-result-item')?.querySelector('span')?.textContent?.split(' · ')[0]);
+    activeTopicId = button.dataset.openTopic;
+    navigate('topic');
+  }));
+  document.querySelectorAll('[data-open-lesson]').forEach(button => button.addEventListener('click', () => {
+    activeLessonId = button.dataset.openLesson;
+    navigate('topic');
+  }));
+  document.querySelectorAll('[data-search-history]').forEach(button => button.addEventListener('click', () => {
+    universalSearchQuery = button.dataset.searchHistory;
+    render();
+  }));
+  document.querySelectorAll('[data-search-recent]').forEach(button => button.addEventListener('click', () => {
+    universalSearchQuery = button.dataset.searchRecent;
+    render();
+  }));
+  document.querySelector('[data-clear-universal-search]')?.addEventListener('click', () => { universalSearchQuery = ''; render(); });
+  document.querySelector('[data-clear-history]')?.addEventListener('click', () => { SubjectCatalogue.clearSearchHistory(); render(); });
+  document.querySelector('[data-ai-discover]')?.addEventListener('click', () => {
+    const query = buttonDatasetAiDiscover();
+    if (query) { aiLastError = null; aiConversation = []; navigate('ai-chat'); askAtlasAI(query, aiLevel); }
+  });
+  document.querySelector('[data-toggle-bookmark-topic]')?.addEventListener('click', () => {
+    const topic = SubjectCatalogue.getTopic(activeTopicId);
+    if (topic) { SubjectCatalogue.toggleBookmark(topic.id, 'topic', topic.name); render(); }
+  });
+  document.querySelector('[data-ask-atlas-topic]')?.addEventListener('click', () => {
+    const topic = SubjectCatalogue.getTopic(activeTopicId);
+    const subject = SubjectCatalogue.getSubject(activeSubjectId);
+    if (topic && subject) askAtlasAI(`Explain the topic "${topic.name}" in ${subject.name}`, aiLevel);
+  });
+  document.querySelector('[data-open-subtopic]')?.addEventListener('click', () => {
+    activeSubtopicId = button.dataset.openSubtopic;
+    render();
+  });
+  document.querySelector('[data-ai-level]')?.addEventListener('click', () => {
+    const levels = Object.keys(AtlasAI.explanationLevels);
+    const current = levels.indexOf(aiLevel);
+    aiLevel = levels[(current + 1) % levels.length];
+    render();
+  });
+
+  const topicSearch = document.getElementById('topic-search');
+  topicSearch?.addEventListener('input', event => { topicSearchQuery = event.target.value; render(); });
+
+  const aiInput = document.getElementById('ai-chat-input');
+  aiInput?.addEventListener('input', event => { aiInputValue = event.target.value; });
+  aiInput?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); document.querySelector('[data-ai-send]')?.click(); } });
+  document.querySelector('[data-ai-send]')?.addEventListener('click', async () => {
+    const input = document.getElementById('ai-chat-input');
+    const text = input ? input.value.trim() : '';
+    if (!text || aiPending) return;
+    aiPending = true; aiLastError = null;
+    aiConversation.push({ role: 'user', content: text, at: Date.now() });
+    render();
+    input.value = '';
+    try {
+      const result = await AtlasAI.explainQuestion(text, { subject: activeSubjectId, topic: activeTopicId, level: aiLevel, quiz: askAtlasContext }, aiLevel);
+      if (result.error) { aiLastError = result.error; }
+      else if (result.data) {
+        const content = formatAIResponse(result.data);
+        aiConversation.push({ role: 'assistant', content, aiGenerated: true, verified: false, at: Date.now() });
+      }
+    } catch (error) { aiLastError = 'Atlas AI encountered an error.'; }
+    aiPending = false;
+    render();
+  });
+
+  document.querySelector('[data-ask-atlas-quiz]')?.addEventListener('click', () => {
+    const question = quizSession?.questions[quizSession.current];
+    if (!question) return;
+    askAtlasContext = { kind: 'quiz', question: question.prompt, context: activeQuiz?.title || '', level: aiLevel };
+    aiLastError = null;
+    aiConversation = [];
+    navigate('ai-chat');
+    askAtlasAI(`I don't understand this quiz question: "${question.prompt}". Context: ${activeQuiz?.title || 'a quiz'}. Please explain what it's asking and how to approach it.`, aiLevel);
+  });
+
+  document.querySelectorAll('[data-level-filter]').forEach(button => button.addEventListener('click', () => { /* level filter kept simple; all subjects shown */ }));
+}
+
+function buttonDatasetAiDiscover() {
+  const btn = document.querySelector('[data-ai-discover]');
+  return btn ? btn.dataset.aiDiscover : null;
+}
+let aiInputValue = '';
+
+async function askAtlasAI(query, level) {
+  aiPending = true; aiLastError = null;
+  aiConversation.push({ role: 'user', content: query, at: Date.now() });
+  render();
+  try {
+    const result = await AtlasAI.discoverTopic(query, level);
+    if (result.error) { aiLastError = result.error; }
+    else if (result.data) {
+      const content = formatAIDiscovery(result.data);
+      aiConversation.push({ role: 'assistant', content, aiGenerated: true, verified: false, at: Date.now() });
+    }
+  } catch (error) { aiLastError = 'Atlas AI encountered an error.'; }
+  aiPending = false;
+  render();
+}
+
+function formatAIResponse(data) {
+  let html = `<strong>${escapeHTML(data.interpretation || data.response || 'Atlas AI response')}</strong>`;
+  if (data.whatItAsks) html += `<p>${escapeHTML(data.whatItAsks)}</p>`;
+  if (data.keyConcepts && data.keyConcepts.length) html += `<p><strong>Key concepts:</strong> ${data.keyConcepts.join(', ')}</p>`;
+  if (data.steps && data.steps.length) {
+    html += `<ol>${data.steps.map(step => `<li>${escapeHTML(step)}</li>`).join('')}</ol>`;
+  }
+  if (data.hint) html += `<p><strong>Hint:</strong> ${escapeHTML(data.hint)}</p>`;
+  if (data.nextSteps && data.nextSteps.length) html += `<p><strong>Next:</strong> ${escapeHTML(data.nextSteps.join(' '))}</p>`;
+  if (data.whyIncorrect) html += `<p><strong>Why your answer was incorrect:</strong> ${escapeHTML(data.whyIncorrect)}</p>`;
+  if (data.correctReasoning) html += `<p><strong>Correct reasoning:</strong> ${escapeHTML(data.correctReasoning)}</p>`;
+  if (data.example) html += `<p><strong>Example:</strong> ${escapeHTML(data.example)}</p>`;
+  if (data.suggestion) html += `<p>${escapeHTML(data.suggestion)}</p>`;
+  if (data.encouragement) html += `<p><em>${escapeHTML(data.encouragement)}</em></p>`;
+  if (data.disclaimer) html += `<p class="ai-disclaimer">${escapeHTML(data.disclaimer)}</p>`;
+  return html;
+}
+
+function formatAIDiscovery(data) {
+  let html = `<p><strong>Field:</strong> ${escapeHTML(data.field)} · <strong>Level:</strong> ${escapeHTML(data.levelLabel)}</p>`;
+  html += `<p>${escapeHTML(data.introduction)}</p>`;
+  if (data.subtopics && data.subtopics.length) {
+    html += `<h4>Suggested subtopics</h4><ul>${data.subtopics.map(st => `<li><strong>${escapeHTML(st.name)}</strong> - ${escapeHTML(st.description)}</li>`).join('')}</ul>`;
+  }
+  if (data.prerequisites && data.prerequisites.length) {
+    html += `<h4>Prerequisites</h4><ul>${data.prerequisites.map(p => `<li>${escapeHTML(p)}</li>`).join('')}</ul>`;
+  }
+  if (data.pathway && data.pathway.length) {
+    html += `<h4>Suggested learning pathway</h4><ol>${data.pathway.map(p => `<li><strong>Step ${p.step} - ${escapeHTML(p.action)}:</strong> ${escapeHTML(p.detail)}</li>`).join('')}</ol>`;
+  }
+  if (data.practiceQuestions && data.practiceQuestions.length) {
+    html += `<h4>Practice questions</h4><ul>${data.practiceQuestions.map(q => `<li><strong>${escapeHTML(q.prompt)}</strong><br>${escapeHTML(q.explanation)}</li>`).join('')}</ul>`;
+  }
+  html += `<p class="ai-disclaimer">${escapeHTML(data.note || 'AI-generated content · not academically verified')}</p>`;
+  return html;
 }
 
 document.addEventListener('click', event => {
