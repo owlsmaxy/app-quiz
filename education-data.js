@@ -287,7 +287,28 @@
     )),
     sample: true
   });
-  const programme = (id, name, units) => ({ id, name, description: `Sample academic programme in ${name}.`, units });
+  const programme = (id, name, units) => ({
+    id,
+    name,
+    description: `Sample academic programme in ${name}.`,
+    units: [
+      ...units,
+      ...[3, 4].flatMap(year => [1, 2].map(semester => {
+        const topics = year === 3
+          ? ['Advanced concepts and methods', 'Applied analysis and evaluation']
+          : ['Specialist practice', 'Research and project design'];
+        return unit(
+          `${id}-year-${year}-semester-${semester}`,
+          year === 3
+            ? `Advanced ${name} ${semester === 1 ? 'I' : 'II'}`
+            : `${name} Capstone ${semester === 1 ? 'I' : 'II'}`,
+          year,
+          semester,
+          topics
+        );
+      }))
+    ]
+  });
   const university = [
     {
       id: 'computing-and-informatics', name: 'Faculty of Computing and Informatics', icon: '💻',

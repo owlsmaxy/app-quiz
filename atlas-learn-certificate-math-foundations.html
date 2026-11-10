@@ -1,1 +1,102 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Atlas Learn Certificate — Math Foundations</title><style>body{margin:0;padding:40px;background:#11182e;color:#25233b;font-family:Georgia,serif}.certificate{max-width:900px;margin:5vh auto;padding:58px 40px;text-align:center;background:#fffdf7;border:12px double #c49a46;outline:1px solid #6f5a9e;outline-offset:-22px}.mark{font-size:52px;color:#c49a46}.brand{font:700 13px Arial,sans-serif;letter-spacing:5px;color:#65508f}.label{margin-top:42px;font:700 12px Arial,sans-serif;letter-spacing:4px;color:#987b3f}.name{margin:18px 0;font-size:48px;color:#322b4d}.description{font-size:18px;color:#686278}.course{margin:20px auto;font-size:27px;color:#5d4a84}.date{margin:40px 0 0;font:14px Arial,sans-serif;color:#777}.note{margin:25px auto 0;max-width:570px;font:12px/1.6 Arial,sans-serif;color:#807a8b}@media(max-width:600px){body{padding:10px}.certificate{padding:40px 22px}.name{font-size:34px}.course{font-size:21px}}</style><main class="certificate"><div class="mark">♛</div><div class="brand">ATLAS LEARN · MONTHLY SCHOLAR</div><div class="label">CERTIFICATE OF ACHIEVEMENT</div><h1 class="name">Alex Morgan</h1><p class="description">has earned this certificate by achieving a Perfect Score in</p><div class="course">Math Foundations</div><p class="date">Awarded November 3, 2026</p><p class="note">This certificate recognizes a learning achievement earned through quiz activity. It was not granted by membership purchase. Membership shown is a local demonstration preview; no payment was processed.</p></main></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width">
+    <title>Atlas Learn Certificate</title>
+    <style>
+      body { margin: 0; padding: 40px; background: #11182e; color: #25233b; font-family: Georgia, serif; }
+      .certificate { position: relative; max-width: 900px; margin: 5vh auto; padding: 58px 40px; text-align: center; background: #fffdf7; border: 12px double #c49a46; outline: 1px solid #6f5a9e; outline-offset: -22px; }
+      .mark { font-size: 52px; color: #c49a46; }
+      .brand { color: #65508f; font: 700 13px Arial, sans-serif; letter-spacing: 5px; }
+      .label { margin-top: 42px; color: #987b3f; font: 700 12px Arial, sans-serif; letter-spacing: 4px; }
+      .name { margin: 18px 0; color: #322b4d; font-size: 48px; }
+      .description { color: #686278; font-size: 18px; }
+      .course { margin: 20px auto; color: #5d4a84; font-size: 27px; }
+      .date, .certificate-id { color: #777; font: 14px Arial, sans-serif; }
+      .note { max-width: 570px; margin: 25px auto 0; color: #807a8b; font: 12px/1.6 Arial, sans-serif; }
+      .certificate-actions { margin-top: 28px; }
+      button { padding: 11px 18px; color: white; background: #6558a8; border: 0; border-radius: 6px; cursor: pointer; font: 600 14px Arial, sans-serif; }
+      .status { max-width: 600px; color: #fff; font-family: Arial, sans-serif; text-align: center; }
+      .status h1 { margin-bottom: 12px; }
+      .status p { line-height: 1.6; }
+      .status a { color: #f3d996; }
+      [hidden] { display: none !important; }
+      @media (max-width: 600px) {
+        body { padding: 10px; }
+        .certificate { padding: 40px 22px; }
+        .name { font-size: 34px; }
+        .course { font-size: 21px; }
+      }
+      @media print {
+        @page { size: landscape; margin: 8mm; }
+        body { padding: 0; background: white; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        .certificate { max-width: none; margin: 0; }
+        .certificate-actions, .status { display: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="certificate" id="certificate" hidden>
+      <div class="mark" aria-hidden="true">♛</div>
+      <div class="brand">ATLAS LEARN</div>
+      <div class="label">CERTIFICATE OF ACHIEVEMENT</div>
+      <h1 class="name" id="student-name"></h1>
+      <p class="description">has earned this certificate by achieving a Perfect Score in</p>
+      <div class="course" id="course"></div>
+      <p class="date" id="date"></p>
+      <p class="certificate-id" id="certificate-id"></p>
+      <p class="note">This certificate is based on locally saved demo data. It is not an accredited qualification or independently verifiable credential. No payment is processed by this page.</p>
+      <div class="certificate-actions"><button type="button" id="print-certificate">Print / Save as PDF</button></div>
+    </main>
+    <main class="status" id="certificate-status" role="status" aria-live="polite">
+      <h1>No eligible certificate found</h1>
+      <p>Complete a quiz with a perfect score and have active Atlas Plus demo access to view its certificate. This page uses learning records saved in this browser.</p>
+      <a href="index.html#rewards">Return to Atlas Learn</a>
+    </main>
+    <script>
+      (() => {
+        const status = document.getElementById('certificate-status');
+        try {
+          const saved = JSON.parse(localStorage.getItem('atlas-learn-demo-v1') || 'null');
+          const certificates = Array.isArray(saved?.certificates) ? saved.certificates : [];
+          const history = Array.isArray(saved?.history) ? saved.history : [];
+          const requestedId = new URLSearchParams(location.search).get('id');
+          const matchesEarnedScore = certificate => history.some(entry =>
+            entry.quizId === certificate.quizId &&
+            entry.date === certificate.completionDate &&
+            entry.total > 0 &&
+            entry.correct === entry.total
+          );
+          const certificate = (requestedId
+            ? certificates.filter(item => item.id === requestedId)
+            : certificates
+          ).find(matchesEarnedScore);
+          if (!certificate) return;
+
+          const membership = saved.profile?.membership;
+          const expiresAt = Date.parse(saved.profile?.membershipExpiresAt || '');
+          if (!['monthly', 'yearly'].includes(membership) || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+            status.querySelector('p').textContent = 'This earned certificate is available while Atlas Plus demo access is active. The achievement remains in your learning history.';
+            return;
+          }
+
+          const setText = (id, value) => {
+            document.getElementById(id).textContent = value;
+          };
+          setText('student-name', typeof certificate.studentName === 'string' ? certificate.studentName : 'Atlas Learn learner');
+          setText('course', typeof certificate.course === 'string' ? certificate.course : certificate.title || 'Learning achievement');
+          setText('date', `Awarded ${new Date(certificate.completionDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}`);
+          setText('certificate-id', `Certificate ID: ${certificate.id}`);
+          document.getElementById('certificate').hidden = false;
+          status.hidden = true;
+          document.title = `Atlas Learn Certificate — ${certificate.title || 'Achievement'}`;
+          document.getElementById('print-certificate').addEventListener('click', () => window.print());
+        } catch (error) {
+          console.error('Unable to load the locally saved certificate.', error);
+          status.querySelector('p').textContent = 'The locally saved certificate data could not be read. Return to Atlas Learn and check browser storage settings.';
+        }
+      })();
+    </script>
+  </body>
+</html>

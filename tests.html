@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Atlas Learn — Browser tests</title>
+    <style>
+      body { max-width: 760px; margin: 40px auto; padding: 0 20px; color: #292a3c; font: 16px/1.5 system-ui, sans-serif; }
+      h1 { margin-bottom: 4px; }
+      #summary { font-weight: 700; }
+      li { margin: 8px 0; }
+      .pass { color: #18764f; }
+      .fail { color: #ae3939; }
+    </style>
+    <script defer src="education-data.js"></script>
+    <script defer src="question-bank.js"></script>
+    <script defer src="tests.js"></script>
+  </head>
+  <body>
+    <h1>Atlas Learn browser tests</h1>
+    <p>Dependency-free checks for the education catalog and question bank.</p>
+    <p id="summary" role="status" aria-live="polite">Running tests…</p>
+    <ol id="results"></ol>
+  </body>
+</html>

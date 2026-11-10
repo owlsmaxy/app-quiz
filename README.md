@@ -27,7 +27,7 @@ Then open [http://localhost:8000](http://localhost:8000). If Python is not insta
 - Free access to the learning catalog, free quizzes, scores and progress, with a configurable monthly quiz-start allowance and focused five-question practice sessions; Premium demo access unlocks unlimited starts, larger sessions, more question formats, advanced settings, reports, challenges, badges and eligible certificate previews.
 - Learner dashboard with saved quiz totals, score averages, newly tracked quiz time, recorded streak, chosen education pathway, activity, and curriculum-topic progress from fully answered Quiz Studio sessions.
 - Learning analytics with saved-result history and a seven-day score chart; Premium adds education-level, subject, topic, and date filters plus subject and topic performance breakdowns.
-- Rule-based achievements with earned dates, plus a print-friendly Atlas Learn-issued certificate for an earned perfect quiz score. Certificates are not official accreditation.
+- Rule-based achievements with earned dates, plus a print-friendly Atlas Learn-issued certificate for an earned perfect quiz score. Certificates are not official accreditation. The standalone certificate page displays only a locally saved certificate that matches an earned perfect-score result and active demo membership; it does not create or independently verify awards.
 - Exclusive Atlas Plus dashboard, performance statistics, achievement badges, and weekly/monthly challenges earned through completed premium quizzes.
 - Achievement-based certificate previews with unique local IDs, QR checks, and browser print-to-PDF.
 - Keyboard-friendly navigation, reduced-motion support, and light/dark themes.
@@ -51,6 +51,10 @@ Google Fonts are loaded from Google Fonts when an internet connection is availab
 `education-data.js` contains the reusable education catalog and lookup helpers used by the Learn page. Education levels, curricula, grades, pathways, subject offerings, topics, university faculties, programmes and units are represented as separate data collections with stable IDs. Add or adjust catalog entries there rather than embedding curriculum data in page markup. The browser-only profile stores selection IDs so the catalog can later be backed by a database.
 
 The included subjects, units and topics are illustrative sample content for demonstrating navigation. They are not verified official curriculum requirements or a substitute for curriculum-authority materials.
+
+## Browser tests
+
+Open `tests.html` directly in a modern browser, or start the local static server and visit `http://localhost:8000/tests.html`. The dependency-free checks cover required grade identifiers, university unit availability in every year and semester, sample-question validation, answer grading, and exact-context filtering.
 
 ## Quiz question bank
 
