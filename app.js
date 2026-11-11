@@ -2629,7 +2629,8 @@ function topicPage() {
   const query = topicSearchQuery.trim().toLocaleLowerCase();
   const visible = query ? subtopics.filter(st => `${st.name} ${st.description}`.toLocaleLowerCase().includes(query)) : subtopics;
   const bookmarked = SubjectCatalogue.isBookmarked(topic.id, 'topic');
-  return `${pageHeading('EXPLORE TOPIC', topic.name, `${escapeHTML(subject.name)} · ${escapeHTML(SubjectCatalogue.levelLabels[subject.level] || subject.level)}`, '<div class="heading-actions"><button class="secondary-button" data-toggle-bookmark-topic>${bookmarked ? 'Unsave' : 'Save'} topic ${icons.book}</button><button class="secondary-button" data-ask-atlas-topic>Ask Atlas AI about this topic ${icons.chat}</button></div>')}
+  const headingActions = `<div class="heading-actions"><button class="secondary-button" data-toggle-bookmark-topic>${bookmarked ? 'Unsave' : 'Save'} topic ${icons.book}</button><button class="secondary-button" data-ask-atlas-topic>Ask Atlas AI about this topic ${icons.chat}</button></div>`;
+  return `${pageHeading('EXPLORE TOPIC', topic.name, `${escapeHTML(subject.name)} · ${escapeHTML(SubjectCatalogue.levelLabels[subject.level] || subject.level)}`, headingActions)}
     <label class="search-box">${icons.search}<input id="topic-search" type="search" value="${escapeHTML(topicSearchQuery)}" placeholder="Search subtopics and lessons..." aria-label="Search subtopics"></label>
     <div class="topic-description"><strong>About this topic.</strong> ${escapeHTML(topic.description)}</div>
     <div class="topic-subtopics">${visible.length ? visible.map(subtopic => `<article class="subtopic-card" tabindex="0" role="button" data-open-subtopic="${escapeHTML(subtopic.id)}"><span class="subtopic-number">✦</span><div><strong>${escapeHTML(subtopic.name)}</strong><p>${escapeHTML(subtopic.description)}</p></div><span class="subtopic-lessons">${subtopic.lessons ? subtopic.lessons.length : 0} lesson${subtopic.lessons ? (subtopic.lessons.length === 1 ? '' : 's') : '0'}</span><span class="subtopic-arrow">→</span></article>`).join('') : '<div class="empty-state compact"><p>No subtopics match your search.</p></div>'}</div>
@@ -2638,7 +2639,8 @@ function topicPage() {
 }
 
 function aiChatPage() {
-  return `${pageHeading('ASK ATLAS AI', 'Your learning assistant', 'Get help with questions, concepts, lessons and practice. Atlas AI is a patient tutor that explains step by step.', '<div class="heading-actions"><button class="secondary-button" data-ai-level>${aiLevel ? SubjectCatalogue.levelLabels[aiLevel] : 'Intermediate'} level ${icons.sparkles}</button></div>')}
+  const headingActions = `<div class="heading-actions"><button class="secondary-button" data-ai-level>${aiLevel ? SubjectCatalogue.levelLabels[aiLevel] : 'Intermediate'} level ${icons.sparkles}</button></div>`;
+  return `${pageHeading('ASK ATLAS AI', 'Your learning assistant', 'Get help with questions, concepts, lessons and practice. Atlas AI is a patient tutor that explains step by step.', headingActions)}
     <div class="ai-chat-shell">
       <div class="ai-chat-messages" id="ai-chat-messages" aria-live="polite">
         ${aiConversation.length ? aiConversation.map(message => aiMessageBubble(message)).join('') : `<div class="ai-welcome"><div class="ai-welcome-icon">${icons.sparkles}</div><h2>Hello, I'm Atlas AI</h2><p>I'm here to help you understand questions, concepts and lessons. You can ask me to:</p><ul class="ai-welcome-list"><li>Explain a question you don't understand</li><li>Give you a hint before revealing the answer</li><li>Explain why an answer is right or wrong</li><li>Guide you step by step through a problem</li><li>Continue a conversation with follow-up questions</li></ul><p class="ai-welcome-note">Choose your explanation level above, then type your question below.</p></div>`}

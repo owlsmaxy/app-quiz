@@ -1237,6 +1237,6 @@
     searchCatalogue, addSearchHistory, getSearchHistory, clearSearchHistory, addRecentSearch, getRecentSearches,
     toggleBookmark, isBookmarked, getBookmarks,
     addDiscipline, addSubject, addSpecialization, addCourse, addTopic, addSubtopic, addLesson, addPracticeQuestion,
-    disciplines: Object.freeze(disciplines.map(d => Object.freeze({ ...d, subjects: d.subjects.map(s => Object.freeze({ ...s, specializations: s.specializations.map(sp => Object.freeze({ ...sp, courses: sp.courses.map(c => Object.freeze({ ...c, subtopics: c.subtopics.map(t => Object.freeze({ ...t, lessons: t.lessons.map(l => Object.freeze(l)).sort((a,b)=>a.title.localeCompare(b.title)) }))).sort((a,b)=>a.name.localeCompare(b.name)) }))).sort((a,b)=>a.name.localeCompare(b.name)) }))).sort((a,b)=>a.name.localeCompare(b.name)) }))
+    disciplines: Object.freeze(disciplines.map(d => Object.freeze({ ...d, subjects: Object.freeze([...d.subjects].sort((a, b) => a.name.localeCompare(b.name))) })))
   });
 })();
