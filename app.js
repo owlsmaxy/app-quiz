@@ -2451,6 +2451,10 @@ function render() {
   main.innerHTML = page();
   document.getElementById('globe-dots')?.insertAdjacentHTML('beforeend', globeDots());
   bindPageInteractions();
+  if (activePage === 'ai-chat' && (aiConversation.length || aiPending)) {
+    const messages = document.getElementById('ai-chat-messages');
+    if (messages) messages.scrollTop = messages.scrollHeight;
+  }
   document.title = `${pageLabels[activePage] || 'Home'} · Atlas Learn`;
   scheduleMembershipExpiry();
 }
@@ -2639,20 +2643,30 @@ function topicPage() {
 }
 
 function aiChatPage() {
-  const headingActions = `<div class="heading-actions"><button class="secondary-button" data-ai-level>${aiLevel ? SubjectCatalogue.levelLabels[aiLevel] : 'Intermediate'} level ${icons.sparkles}</button></div>`;
-  return `${pageHeading('ASK ATLAS AI', 'Your learning assistant', 'Get help with questions, concepts, lessons and practice. Atlas AI is a patient tutor that explains step by step.', headingActions)}
-    <div class="ai-chat-shell">
+  return `<section class="ai-chat-shell" aria-label="Atlas AI conversation">
+      <header class="ai-chat-header">
+        <div class="ai-chat-identity">
+          <span class="ai-chat-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 14.1 9.9 21 12l-6.9 2.1L12 21l-2.1-6.9L3 12l6.9-2.1L12 3Z"/><path d="m19 3 .7 2.3L22 6l-2.3.7L19 9l-.7-2.3L16 6l2.3-.7L19 3Z"/></svg></span>
+          <div><h1>Atlas AI</h1><p>Your Intelligent Learning Assistant</p></div>
+        </div>
+        <button type="button" class="secondary-button ai-level-button" data-ai-level title="Change explanation level">${AtlasAI.levelLabel(aiLevel)} ${icons.sparkles}</button>
+      </header>
       <div class="ai-chat-messages" id="ai-chat-messages" aria-live="polite">
-        ${aiConversation.length ? aiConversation.map(message => aiMessageBubble(message)).join('') : `<div class="ai-welcome"><div class="ai-welcome-icon">${icons.sparkles}</div><h2>Hello, I'm Atlas AI</h2><p>I'm here to help you understand questions, concepts and lessons. You can ask me to:</p><ul class="ai-welcome-list"><li>Explain a question you don't understand</li><li>Give you a hint before revealing the answer</li><li>Explain why an answer is right or wrong</li><li>Guide you step by step through a problem</li><li>Continue a conversation with follow-up questions</li></ul><p class="ai-welcome-note">Choose your explanation level above, then type your question below.</p></div>`}
+        ${aiConversation.length ? aiConversation.map(message => aiMessageBubble(message)).join('') : `<div class="ai-welcome"><div class="ai-welcome-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 14.1 9.9 21 12l-6.9 2.1L12 21l-2.1-6.9L3 12l6.9-2.1L12 3Z"/><path d="m19 3 .7 2.3L22 6l-2.3.7L19 9l-.7-2.3L16 6l2.3-.7L19 3Z"/></svg></div><h2>Hello! I'm Atlas AI.</h2><p>Your personal learning assistant. Ask me questions, explore difficult topics and improve your understanding.</p><div class="ai-suggestions" aria-label="Try asking Atlas AI">
+          <button type="button" class="ai-suggestion" data-ai-prompt="Explain a difficult concept"><span class="ai-suggestion-icon">${icons.sparkles}</span><span><strong>Explain a difficult concept</strong><small>Break a tricky idea into simple steps</small></span>${icons.arrow}</button>
+          <button type="button" class="ai-suggestion" data-ai-prompt="Help me solve a question"><span class="ai-suggestion-icon">${icons.chat}</span><span><strong>Help me solve a question</strong><small>Work through a problem with guidance</small></span>${icons.arrow}</button>
+          <button type="button" class="ai-suggestion" data-ai-prompt="Give me a hint"><span class="ai-suggestion-icon">${icons.arrowRight}</span><span><strong>Give me a hint</strong><small>Get a nudge without the full answer</small></span>${icons.arrow}</button>
+          <button type="button" class="ai-suggestion" data-ai-prompt="Teach me a new topic"><span class="ai-suggestion-icon">${icons.book}</span><span><strong>Teach me a new topic</strong><small>Start exploring something new</small></span>${icons.arrow}</button>
+        </div></div>`}
       </div>
       <div class="ai-chat-input-area">
-        <label class="search-box ai-search-box">${icons.chat}<input id="ai-chat-input" type="search" value="" placeholder="Ask a question about your lesson..." aria-label="Ask Atlas AI"></label>
-        <button class="primary-button" data-ai-send>Send ${icons.arrow}</button>
+        <label class="search-box ai-search-box">${icons.chat}<input id="ai-chat-input" type="text" value="" placeholder="Ask Atlas AI anything..." aria-label="Ask Atlas AI"></label>
+        <button type="button" class="primary-button" data-ai-send ${aiPending ? 'disabled' : ''}>Send ${icons.arrow}</button>
       </div>
-      ${aiPending ? `<div class="ai-loading"><span>Atlas AI is thinking…</span></div>` : ''}
-      ${aiLastError ? `<div class="ai-error"><span>!</span>${escapeHTML(aiLastError)}</div>` : ''}
-    </div>
-    <div class="ai-chat-footer"><small>Atlas AI responses are AI-generated and clearly labelled. They are not academically verified. For critical academic work, consult a teacher, tutor or trusted textbook.</small></div>`;
+      ${aiPending ? `<div class="ai-loading" role="status" aria-live="polite"><span>Atlas AI is thinking</span><i></i><i></i><i></i></div>` : ''}
+      ${aiLastError ? `<div class="ai-error" role="alert"><span aria-hidden="true">!</span>${escapeHTML(aiLastError)}</div>` : ''}
+      <div class="ai-chat-footer"><small>Atlas AI responses are AI-generated and clearly labelled. They are not academically verified. For critical academic work, consult a teacher, tutor or trusted textbook.</small></div>
+    </section>`;
 }
 
 function aiMessageBubble(message) {
@@ -3223,6 +3237,13 @@ function bindPageInteractions() {
   const aiInput = document.getElementById('ai-chat-input');
   aiInput?.addEventListener('input', event => { aiInputValue = event.target.value; });
   aiInput?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); document.querySelector('[data-ai-send]')?.click(); } });
+  document.querySelectorAll('[data-ai-prompt]').forEach(button => button.addEventListener('click', () => {
+    const input = document.getElementById('ai-chat-input');
+    if (!input) return;
+    input.value = button.dataset.aiPrompt;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
+  }));
   document.querySelector('[data-ai-send]')?.addEventListener('click', async () => {
     const input = document.getElementById('ai-chat-input');
     const text = input ? input.value.trim() : '';
