@@ -347,6 +347,12 @@ let aiCloudConversationsLoaded = false;
 let aiCloudLoading = false;
 let aiRequestToken = 0;
 let aiLastQuestion = '';
+let aiAbortController = null;
+let aiHistorySearch = '';
+let aiHistoryMobileOpen = false;
+let aiSearchResults = [];
+let aiSearchLoading = false;
+let aiHistorySearchTimer = null;
 let aiLevel = 'intermediate';
 let aiPending = false;
 let aiLastError = null;
@@ -2421,6 +2427,7 @@ function authPage() {
     <div class="field"><label for="demo-email">Email ${cloudAuth ? '' : '(optional)'}</label><input id="demo-email" name="email" type="email" maxlength="120" autocomplete="email" value="${state.profile.signedIn ? escapeHTML(state.profile.email) : ''}" ${cloudAuth ? 'required' : ''} placeholder="you@example.com"></div>
     ${cloudAuth ? '<div class="field"><label for="demo-password">Password</label><input id="demo-password" name="password" type="password" minlength="8" autocomplete="current-password" required placeholder="At least 8 characters"></div>' : ''}
     <button type="submit" class="primary-button">${cloudAuth ? (authMode === 'signup' ? 'Create secure account' : 'Sign in securely') : (authMode === 'signup' ? 'Create local demo profile' : 'Continue in demo mode')} ${icons.arrow}</button></form>
+    ${cloudAuth ? `<div class="auth-divider"><span>or</span></div><button type="button" class="secondary-button auth-provider-button" data-magic-link>Send me a magic link</button><button type="button" class="secondary-button auth-provider-button" data-google-signin>Continue with Google</button>` : ''}
     <div class="auth-switch">${authMode === 'signup' ? 'Already have an account?' : 'New to Atlas Learn?'} <button type="button" data-auth-switch>${authMode === 'signup' ? 'Sign in' : 'Create an account'}</button></div>
     <div class="auth-switch"><button type="button" data-forgot-password>Forgot password?</button> ${cloudAuth ? 'We will email a secure reset link.' : 'Password recovery requires a secure account provider.'}</div>
     <div class="auth-switch"><button type="button" data-page="home">Continue as guest</button></div></section>`;
@@ -2652,13 +2659,24 @@ function topicPage() {
     <div class="topic-verified-badge">${topic.verified !== false ? '<span>✓ Verified catalogue content</span>' : '<span style="color:var(--orange)">⚠ AI-generated suggestion · Not academically verified</span>'}</div>`;
 }
 
+function groupAIConversations(items) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  const week = new Date(today); week.setDate(today.getDate() - 7);
+  const groups = { Today: [], Yesterday: [], 'Previous 7 days': [], Older: [] };
+  items.forEach((item) => { const date = new Date(item.updated_at || item.created_at); if (date >= today) groups.Today.push(item); else if (date >= yesterday) groups.Yesterday.push(item); else if (date >= week) groups['Previous 7 days'].push(item); else groups.Older.push(item); });
+  return Object.entries(groups).filter(([, values]) => values.length);
+}
+
 function aiChatPage() {
   const aiConfigStatus = window.AtlasCloud?.getConfigStatus?.() || { configured: false, missing: ['project URL', 'publishable/anon key'] };
   const historyEmpty = aiConfigStatus.configured ? 'Sign in to save and reopen conversations.' : `Configure your ${aiConfigStatus.missing.join(' and ')} in supabase-config.js, then sign in.`;
+  const visibleConversations = aiCloudConversations.filter((item) => !aiHistorySearch.trim() || `${item.title} ${item.subject || ''} ${item.level || ''}`.toLowerCase().includes(aiHistorySearch.trim().toLowerCase()));
+  const groupedHistory = groupAIConversations(visibleConversations);
   return `<section class="ai-chat-shell" aria-label="Atlas AI conversation">
-      <aside class="ai-history-panel" aria-label="Conversation history"><div class="ai-history-head"><strong>Conversations</strong><button type="button" class="text-button" data-ai-new>New</button></div>${aiCloudLoading ? '<p class="ai-history-status">Loading history…</p>' : aiCloudConversations.length ? `<div class="ai-history-list">${aiCloudConversations.map(item => `<div class="ai-history-row"><button type="button" class="ai-history-item ${item.id === aiConversationId ? 'active' : ''}" data-ai-open="${escapeHTML(item.id)}"><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.topic || item.subject || 'Atlas AI')} · ${formatDate(item.updated_at)}</small></button><button type="button" class="ai-history-action" data-ai-rename="${escapeHTML(item.id)}" aria-label="Rename conversation">Rename</button><button type="button" class="ai-history-action danger-text" data-ai-delete="${escapeHTML(item.id)}" aria-label="Delete conversation">Delete</button></div>`).join('')}</div>` : `<p class="ai-history-status">${historyEmpty}</p>`}</aside>
+      <aside class="ai-history-panel ${aiHistoryMobileOpen ? 'open' : ''}" aria-label="Conversation history"><div class="ai-history-head"><strong>Conversations</strong><span><button type="button" class="text-button" data-ai-export>Export</button><button type="button" class="text-button" data-ai-new>New chat</button></span></div><label class="search-box ai-history-search">${icons.search}<input id="ai-history-search" type="search" value="${escapeHTML(aiHistorySearch)}" placeholder="Search chats" aria-label="Search conversations"></label>${aiSearchLoading ? '<p class="ai-history-status">Searching…</p>' : aiSearchResults.length ? `<section class="ai-history-group"><h3>Message matches</h3>${aiSearchResults.map(item => `<button type="button" class="ai-search-result" data-ai-open="${escapeHTML(item.conversation_id)}"><strong>${escapeHTML(item.content.slice(0, 100))}</strong><small>${new Date(item.created_at).toLocaleDateString()}</small></button>`).join('')}</section>` : ''}${aiCloudLoading ? '<p class="ai-history-status">Loading history…</p>' : groupedHistory.length ? `<div class="ai-history-list">${groupedHistory.map(([label, items]) => `<section class="ai-history-group"><h3>${label}</h3>${items.map(item => `<div class="ai-history-row"><button type="button" class="ai-history-item ${item.id === aiConversationId ? 'active' : ''}" data-ai-open="${escapeHTML(item.id)}"><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.subject || 'Atlas AI')} · ${formatDate(item.updated_at)}</small></button><button type="button" class="ai-history-action" data-ai-rename="${escapeHTML(item.id)}" aria-label="Rename conversation">Rename</button><button type="button" class="ai-history-action danger-text" data-ai-delete="${escapeHTML(item.id)}" aria-label="Delete conversation">Delete</button></div>`).join('')}</section>`).join('')}</div>` : `<p class="ai-history-status">${historyEmpty}</p>`}</aside>
       <header class="ai-chat-header">
-        <div class="ai-chat-identity">
+        <div class="ai-chat-identity"><button type="button" class="secondary-button ai-mobile-history" data-ai-history-toggle aria-expanded="${aiHistoryMobileOpen}">Chats</button>
           <span class="ai-chat-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 14.1 9.9 21 12l-6.9 2.1L12 21l-2.1-6.9L3 12l6.9-2.1L12 3Z"/><path d="m19 3 .7 2.3L22 6l-2.3.7L19 9l-.7-2.3L16 6l2.3-.7L19 3Z"/></svg></span>
           <div><h1>Atlas AI</h1><p>Your Intelligent Learning Assistant</p></div>
         </div>
@@ -2679,14 +2697,14 @@ function aiChatPage() {
       </div>
       ${aiPending ? `<div class="ai-loading" role="status" aria-live="polite"><span>Atlas AI is thinking</span><i></i><i></i><i></i></div>` : ''}
       ${aiLastError ? `<div class="ai-error" role="alert"><span aria-hidden="true">!</span>${escapeHTML(aiLastError)}${aiLastQuestion ? '<button type="button" class="text-button" data-ai-retry>Retry</button>' : ''}</div>` : ''}
-      <div class="ai-chat-footer"><small>Atlas AI responses are AI-generated and clearly labelled. They are not academically verified. For critical academic work, consult a teacher, tutor or trusted textbook.</small></div>
+      <div class="ai-chat-footer"><small>Atlas AI can make mistakes. For critical academic work, check the explanation with a teacher, tutor or trusted textbook.</small></div>
     </section>`;
 }
 
 function aiMessageBubble(message) {
   const own = message.role === 'user';
-  const content = own ? escapeHTML(message.content).replace(/\n/g, '<br>') : formatAIMessageContent(message.content);
-  return `<div class="ai-message ${own ? 'ai-message-own' : 'ai-message-ai'}"><div class="ai-message-bubble">${content}${message.aiGenerated ? `<div class="ai-badge">AI-generated · not verified</div>` : ''}${own ? '' : '<button type="button" class="ai-copy-button" data-ai-copy>Copy</button>'}</div><div class="ai-message-meta">${own ? 'You' : 'Atlas AI'} · ${new Date(message.at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></div>`;
+  const content = own ? escapeHTML(message.content).replace(/\n/g, '<br>') : (message.streaming && !message.content ? '<span class="ai-streaming-dots">…</span>' : formatAIMessageContent(message.content));
+  return `<div class="ai-message ${own ? 'ai-message-own' : 'ai-message-ai'}"><div class="ai-message-bubble">${content}${own ? '' : '<button type="button" class="ai-copy-button" data-ai-copy>Copy</button>'}</div><div class="ai-message-meta">${own ? 'You' : 'Atlas AI'} · ${new Date(message.at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></div>`;
 }
 
 function formatAIMessageContent(content) {
@@ -2694,24 +2712,24 @@ function formatAIMessageContent(content) {
   html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
   html = html.replace(/^###\s*(.+)$/gm, '<h4>$1</h4>').replace(/^##\s*(.+)$/gm, '<h3>$1</h3>').replace(/^#\s*(.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
-  return html;
+  return window.DOMPurify ? window.DOMPurify.sanitize(html, { USE_PROFILES: { html: true } }) : html;
 }
 
 async function loadAIConversations() {
   if (!window.AtlasCloud?.isConfigured?.()) { aiCloudConversationsLoaded = true; return; }
   aiCloudLoading = true; render();
-  const result = await window.AtlasCloud.listConversations();
+  const result = await AtlasAI.listConversations(aiHistorySearch);
   aiCloudLoading = false; aiCloudConversationsLoaded = true;
-  if (result.error) aiLastError = result.error.message || 'Conversation history is unavailable.';
+  if (result.error && !result.offline) aiLastError = result.error.message || 'Conversation history is unavailable.';
   else aiCloudConversations = result.data || [];
   render();
 }
 
 async function openAIConversation(id) {
-  const result = await window.AtlasCloud.getConversation(id);
-  if (result.error) { aiLastError = 'That conversation could not be opened.'; render(); return; }
+  const result = await AtlasAI.loadMessages(id);
+  if (result.error && !result.offline) { aiLastError = 'That conversation could not be opened.'; render(); return; }
   aiConversationId = id;
-  aiConversation = (result.data?.ai_messages || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).map(item => ({ role: item.role, content: item.content, aiGenerated: item.role === 'assistant', at: item.created_at }));
+  aiConversation = (result.data || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).map(item => ({ role: item.role, content: item.content, at: item.created_at }));
   aiLastError = null; aiInputValue = ''; render();
 }
 
@@ -2720,16 +2738,29 @@ function bindPageInteractions() {
     aiConversationId = ''; aiConversation = []; aiLastError = null; aiInputValue = ''; render();
   }));
   document.querySelectorAll('[data-ai-open]').forEach(button => button.addEventListener('click', () => openAIConversation(button.dataset.aiOpen)));
+  document.querySelector('[data-ai-history-toggle]')?.addEventListener('click', () => { aiHistoryMobileOpen = !aiHistoryMobileOpen; render(); });
+  document.querySelector('[data-ai-export]')?.addEventListener('click', async () => {
+    const format = (window.prompt('Export format: json or markdown', 'json') || 'json').toLowerCase() === 'markdown' ? 'markdown' : 'json';
+    const conversations = await AtlasAI.listConversations();
+    if (conversations.error && !conversations.offline) { showToast('Your chat export could not be loaded.', 'warning'); return; }
+    const allMessages = [];
+    for (const conversation of conversations.data || []) { const result = await AtlasAI.loadMessages(conversation.id); (result.data || []).forEach((message) => allMessages.push({ ...message, conversation_title: conversation.title })); }
+    await AtlasAI.exportConversation(allMessages, format); showToast('Your Atlas AI history was exported.', 'success');
+  });
+  document.getElementById('ai-history-search')?.addEventListener('input', (event) => {
+    aiHistorySearch = event.target.value; aiCloudConversationsLoaded = true; aiSearchResults = []; render(); document.getElementById('ai-history-search')?.focus();
+    window.clearTimeout(aiHistorySearchTimer); aiHistorySearchTimer = window.setTimeout(async () => { if (!aiHistorySearch.trim()) return; aiSearchLoading = true; render(); const result = await AtlasAI.searchMessages(aiHistorySearch); aiSearchResults = result.data || []; aiSearchLoading = false; render(); }, 350);
+  });
   document.querySelectorAll('[data-ai-rename]').forEach(button => button.addEventListener('click', async () => {
     const current = aiCloudConversations.find(item => item.id === button.dataset.aiRename);
     const title = window.prompt('Conversation title:', current?.title || 'New conversation');
     if (!title) return;
-    const result = await window.AtlasCloud.renameConversation(button.dataset.aiRename, title);
+    const result = await AtlasAI.renameConversation(button.dataset.aiRename, title);
     if (result.error) showToast('Conversation could not be renamed.', 'warning'); else { aiCloudConversationsLoaded = false; loadAIConversations(); }
   }));
   document.querySelectorAll('[data-ai-delete]').forEach(button => button.addEventListener('click', async () => {
     if (!window.confirm('Delete this conversation? This cannot be undone.')) return;
-    const result = await window.AtlasCloud.deleteConversation(button.dataset.aiDelete);
+    const result = await AtlasAI.deleteConversation(button.dataset.aiDelete);
     if (result.error) showToast('Conversation could not be deleted.', 'warning');
     else { if (aiConversationId === button.dataset.aiDelete) { aiConversationId = ''; aiConversation = []; } aiCloudConversationsLoaded = false; loadAIConversations(); render(); }
   }));
@@ -2738,7 +2769,7 @@ function bindPageInteractions() {
     const copy = bubble ? [...bubble.childNodes].filter(node => node !== button && node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('') || bubble.innerText.replace('Copy', '').trim() : '';
     try { await navigator.clipboard.writeText(copy); showToast('Response copied.', 'success'); } catch { showToast('Copy is unavailable in this browser.', 'warning'); }
   }));
-  document.querySelector('[data-ai-stop]')?.addEventListener('click', () => { aiRequestToken += 1; aiPending = false; aiLastError = 'Generation stopped.'; render(); });
+  document.querySelector('[data-ai-stop]')?.addEventListener('click', () => { aiRequestToken += 1; aiAbortController?.abort(); aiAbortController = null; aiPending = false; aiLastError = 'Generation stopped before the answer was saved.'; render(); });
   document.querySelector('[data-ai-retry]')?.addEventListener('click', () => { aiInputValue = aiLastQuestion; aiLastError = null; render(); document.querySelector('[data-ai-send]')?.click(); });
   document.querySelectorAll('[data-analytics-filter]').forEach(control => control.addEventListener('change', () => {
     const key = control.dataset.analyticsFilter;
@@ -3240,11 +3271,22 @@ function bindPageInteractions() {
     if (window.AtlasCloud?.isConfigured?.()) {
       const result = authMode === 'signup' ? await window.AtlasCloud.signUp(email, password, name) : await window.AtlasCloud.signIn(email, password);
       if (result.error) { showToast(result.error.message || 'Secure authentication failed.', 'warning'); return; }
+      if (authMode === 'signup' && !result.data?.session) { showToast('Account created. Check your email to confirm it, then sign in.', 'success'); return; }
       Object.assign(state.profile, { name: name.slice(0, 40), email: email.slice(0, 120), avatar: initials(name), signedIn: true });
       persist(); navigate('home'); showToast(authMode === 'signup' ? 'Account created. Check your email if confirmation is enabled.' : 'You are signed in.', 'success'); return;
     }
     Object.assign(state.profile, { name: name.slice(0, 40), email: email.slice(0, 120), avatar: initials(name), signedIn: true });
     persist(); navigate('home'); showToast('Demo profile ready. No account or password was created.', 'success');
+  });
+  document.querySelector('[data-magic-link]')?.addEventListener('click', async () => {
+    const email = document.getElementById('demo-email')?.value.trim();
+    if (!email) { showToast('Enter your email first.', 'warning'); return; }
+    const result = await window.AtlasCloud.sendMagicLink(email, `${location.origin}${location.pathname}#auth`);
+    showToast(result.error ? (result.error.message || 'Magic link could not be sent.') : 'Check your email for a secure sign-in link.', result.error ? 'warning' : 'success');
+  });
+  document.querySelector('[data-google-signin]')?.addEventListener('click', async () => {
+    const result = await window.AtlasCloud.signInWithGoogle(`${location.origin}${location.pathname}#home`);
+    if (result.error) showToast(result.error.message || 'Google sign-in could not start.', 'warning');
   });
 
   const bindSearchWithFocus = (id, update) => {
@@ -3333,19 +3375,27 @@ function bindPageInteractions() {
     const input = document.getElementById('ai-chat-input');
     const text = input ? input.value.trim() : '';
     if (!text || aiPending) return;
-    aiPending = true; aiLastError = null; aiLastQuestion = text; aiInputValue = ''; const requestToken = ++aiRequestToken;
+    aiPending = true; aiLastError = null; aiLastQuestion = text; aiInputValue = ''; const requestToken = ++aiRequestToken; aiAbortController = new AbortController();
     aiConversation.push({ role: 'user', content: text, at: Date.now() });
+    const assistantMessage = { role: 'assistant', content: '', at: Date.now(), streaming: true };
+    aiConversation.push(assistantMessage);
     render();
     try {
-      const result = await AtlasAI.chat(text, aiConversationId, { subject: activeSubjectId, topic: activeTopicId }, aiLevel);
+      const result = await AtlasAI.chat(text, aiConversationId, { subject: educationItemName(activeSubjectId), topic: educationItemName(activeTopicId), curriculum: state.profile.education.curriculumId }, aiLevel, (delta) => {
+        assistantMessage.content += delta;
+        if (requestToken === aiRequestToken) render();
+      }, aiAbortController.signal);
       if (requestToken !== aiRequestToken) return;
       if (result.error) { aiLastError = result.error; }
       else if (result.data) {
         aiConversationId = result.data.conversation?.id || aiConversationId;
-        aiConversation.push({ role: 'assistant', content: result.data.message?.content || '', aiGenerated: true, verified: false, at: Date.now() });
+        assistantMessage.content = result.data.message?.content || assistantMessage.content;
+        assistantMessage.streaming = false;
         aiCloudConversationsLoaded = false;
       }
-    } catch (error) { aiLastError = 'Atlas AI encountered an error.'; }
+    } catch (error) { if (requestToken === aiRequestToken) aiLastError = error.message || 'Atlas AI encountered an error.'; }
+    if (requestToken === aiRequestToken && aiLastError) aiConversation = aiConversation.filter((message) => message !== assistantMessage);
+    if (requestToken === aiRequestToken) aiAbortController = null;
     aiPending = false;
     render();
   });
@@ -3377,8 +3427,7 @@ async function askAtlasAI(query, level) {
     const result = await AtlasAI.discoverTopic(query, level);
     if (result.error) { aiLastError = result.error; }
     else if (result.data) {
-      const content = formatAIDiscovery(result.data);
-      aiConversation.push({ role: 'assistant', content, aiGenerated: true, verified: false, at: Date.now() });
+      aiConversation.push({ role: 'assistant', content: result.data.message?.content || '', at: Date.now() });
     }
   } catch (error) { aiLastError = 'Atlas AI encountered an error.'; }
   aiPending = false;

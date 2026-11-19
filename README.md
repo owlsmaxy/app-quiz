@@ -20,15 +20,15 @@ Useful API routes:
 - `GET /api/questions/:id`
 - `POST /api/quiz/grade` with `{ "questionId": "...", "answer": "..." }`
 
-The API currently uses the repository's sample data and keeps no user accounts or submissions. The first Supabase schema and RLS migration is now documented under `supabase/` but is not applied automatically. Add authentication and persistent storage before using it with real learners.
+The learning catalog and quiz routes use the repository's sample data. Supabase Auth and the AI Tutor's persistent history are opt-in infrastructure and are not applied automatically.
 
 ## Secure AI Tutor setup
 
-The browser never receives a Groq key. AI requests go through `supabase/functions/ai-tutor/index.ts`, which verifies the Supabase session, enforces the database-backed daily quota, loads the last 20 messages, calls Groq, and saves both messages.
+The browser never receives an Anthropic key. AI requests go through `supabase/functions/ai-tutor/index.ts`, which verifies the Supabase session, enforces per-user minute and daily limits, loads the last 10 messages, streams Claude output, and saves both messages only after the answer is complete.
 
 1. Create a Supabase project and enable Email/password Auth.
-2. Apply `supabase/migrations/20261119000100_atlas_learn_initial_schema.sql` in the SQL editor or with the Supabase CLI.
-3. Set Edge Function secrets: `supabase secrets set GROQ_API_KEY=... GROQ_MODEL=llama-3.3-70b-versatile AI_FREE_DAILY_LIMIT=20 AI_PREMIUM_DAILY_LIMIT=200 APP_ORIGIN=https://your-domain.example`.
+2. Apply `supabase/migrations/20261119000100_atlas_learn_initial_schema.sql` and then `supabase/migrations/20261119000200_ai_tutor_conversations.sql` in the SQL editor or with the Supabase CLI.
+3. Set Edge Function secrets: `supabase secrets set ANTHROPIC_API_KEY=... ANTHROPIC_MODEL=claude-haiku-4-5-20251001 AI_FREE_DAILY_LIMIT=20 AI_PREMIUM_DAILY_LIMIT=200 APP_ORIGIN=https://your-domain.example`.
 4. Deploy with `supabase functions deploy ai-tutor`.
 5. Add the public project URL and publishable key to `supabase-config.js`:
 
@@ -37,9 +37,9 @@ const projectUrl = 'https://YOUR_PROJECT.supabase.co';
 const projectPublishableKey = 'YOUR_PUBLISHABLE_KEY';
 ```
 
-Only the URL and publishable key belong in the browser. Never add `SUPABASE_SERVICE_ROLE_KEY` or `GROQ_API_KEY` to HTML, JavaScript, GitHub, or browser requests. The legacy Node `/api/ai` route is intentionally disabled.
+Only the URL and publishable key belong in the browser. Never add `SUPABASE_SERVICE_ROLE_KEY` or `ANTHROPIC_API_KEY` to HTML, JavaScript, GitHub, or browser requests. The legacy Node `/api/ai` route is intentionally disabled.
 
-If public configuration, Auth, the migration, the function deployment, or the Groq secret is missing, the UI reports a configuration/authentication error; it does not claim live AI is working.
+If public configuration, Auth, the migrations, the function deployment, or the Anthropic secret is missing, the UI reports a configuration/authentication error; it does not claim live AI is working.
 
 ## Supabase foundation
 
