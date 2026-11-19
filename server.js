@@ -159,28 +159,7 @@ const server = http.createServer(async (request, response) => {
       return sendJson(response, 200, { questionId: question.id, correct: questionBank.gradeAnswer(question, body.answer) });
     }
     if (url.pathname === '/api/ai' && request.method === 'POST') {
-      const providerEndpoint = process.env.AI_ENDPOINT;
-      const providerKey = process.env.AI_API_KEY;
-      if (!providerEndpoint || !providerKey) {
-        return sendJson(response, 503, { error: 'AI service is not configured on the server.' });
-      }
-      const body = await parseBody(request);
-      const validationError = validateAiRequest(body);
-      if (validationError) return sendJson(response, 400, { error: validationError });
-      if (!withinRateLimit(aiRequestCounters, address, aiRequestLimit)) {
-        return sendJson(response, 429, { error: 'AI request limit reached. Please try again shortly.' });
-      }
-      const upstream = await fetch(providerEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${providerKey}` },
-        body: JSON.stringify(body)
-      });
-      const text = await upstream.text();
-      response.writeHead(upstream.status, {
-        'Content-Type': upstream.headers.get('content-type') || 'application/json; charset=utf-8',
-        ...securityHeaders()
-      });
-      return response.end(text);
+      return sendJson(response, 410, { error: 'The legacy AI proxy is disabled. Configure Supabase Auth and call the ai-tutor Edge Function.' });
     }
     return serveStatic(request, response, url.pathname);
   } catch (error) {

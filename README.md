@@ -22,11 +22,23 @@ Useful API routes:
 
 The API currently uses the repository's sample data and keeps no user accounts or submissions. The first Supabase schema and RLS migration is now documented under `supabase/` but is not applied automatically. Add authentication and persistent storage before using it with real learners.
 
-## Server-side AI key
+## Secure AI Tutor setup
 
-The browser never receives or stores the AI API key. Copy `.env.example` to `.env` (or set environment variables in your hosting provider) and set `AI_ENDPOINT` and `AI_API_KEY` there. Start the server with those variables present. The browser calls `POST /api/ai`, and the server adds the provider authorization header.
+The browser never receives a Groq key. AI requests go through `supabase/functions/ai-tutor/index.ts`, which verifies the Supabase session, enforces the database-backed daily quota, loads the last 20 messages, calls Groq, and saves both messages.
 
-Never use a `NEXT_PUBLIC_`, `VITE_`, or other browser-exposed prefix for `AI_API_KEY`, and never commit `.env`.
+1. Create a Supabase project and enable Email/password Auth.
+2. Apply `supabase/migrations/20261119000100_atlas_learn_initial_schema.sql` in the SQL editor or with the Supabase CLI.
+3. Set Edge Function secrets: `supabase secrets set GROQ_API_KEY=... GROQ_MODEL=llama-3.3-70b-versatile AI_FREE_DAILY_LIMIT=20 AI_PREMIUM_DAILY_LIMIT=200 APP_ORIGIN=https://your-domain.example`.
+4. Deploy with `supabase functions deploy ai-tutor`.
+5. Add the public project URL and publishable key before the Supabase CDN script in `index.html`:
+
+```html
+<script>window.ATLAS_SUPABASE_CONFIG = { url: 'https://YOUR_PROJECT.supabase.co', publishableKey: 'YOUR_PUBLISHABLE_KEY' };</script>
+```
+
+Only the URL and publishable key belong in the browser. Never add `SUPABASE_SERVICE_ROLE_KEY` or `GROQ_API_KEY` to HTML, JavaScript, GitHub, or browser requests. The legacy Node `/api/ai` route is intentionally disabled.
+
+If public configuration, Auth, the migration, the function deployment, or the Groq secret is missing, the UI reports a configuration/authentication error; it does not claim live AI is working.
 
 ## Supabase foundation
 
@@ -56,7 +68,7 @@ The complete audit and staged rollout are recorded in [docs/audit-and-implementa
 
 ## Demo-mode limitations
 
-There is **no backend or secure authentication provider** configured. The profile is a local display profile, not an account; no password is requested or stored. Anyone with access to this browser profile can see or change its local demo data. Profile, settings, membership state, and quiz progress do not sync between devices. The optional profile email is stored only in this browser.
+Without the manual Supabase configuration above, the profile remains a local demo profile. With Supabase configured, Auth accounts and AI Tutor conversations are persistent and protected by RLS; the existing quiz/demo data remains local until a separate reviewed migration/import is implemented.
 
 The leaderboard uses fictional sample learners and is not a live global ranking. Atlas Plus membership is a clearly labelled local demo: confirming a demo plan does not process or verify payment, create a real subscription, or securely authorize users. Demo membership dates and entitlements can be changed by anyone with access to the browser profile. Do not enter passwords or payment-card details. Free quiz limits and Premium prices are configured in `app.js`; changing browser storage or code is not secure enforcement.
 

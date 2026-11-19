@@ -341,6 +341,12 @@ let topicSearchQuery = '';
 let universalSearchQuery = '';
 let aiChatOpen = false;
 let aiConversation = [];
+let aiConversationId = '';
+let aiCloudConversations = [];
+let aiCloudConversationsLoaded = false;
+let aiCloudLoading = false;
+let aiRequestToken = 0;
+let aiLastQuestion = '';
 let aiLevel = 'intermediate';
 let aiPending = false;
 let aiLastError = null;
@@ -2407,14 +2413,16 @@ function settingsPage() {
 }
 
 function authPage() {
-  return `${pageHeading('A FRESH PAGE, A FRESH START', 'Your learning profile', 'Save a display name for this browser and make the experience yours.')}
-    <section class="sign-in-panel"><div class="demo-warning" style="margin-bottom:18px"><strong>Demonstration mode only.</strong> No secure authentication service is configured. Do not enter a password or sensitive information.</div>
-    <h2>${authMode === 'signup' ? 'Set up your demo profile' : 'Welcome back, learner'}</h2><p>This creates a local display profile only. Your progress stays in this browser and is not synced or protected by an account.</p>
+  const cloudAuth = window.AtlasCloud?.isConfigured?.();
+  return `${pageHeading('A FRESH PAGE, A FRESH START', cloudAuth ? 'Sign in to Atlas Learn' : 'Your learning profile', cloudAuth ? 'Use your Supabase account to save AI Tutor conversations across sessions.' : 'Save a display name for this browser and make the experience yours.')}
+    <section class="sign-in-panel"><div class="demo-warning" style="margin-bottom:18px"><strong>${cloudAuth ? 'Secure account mode.' : 'Demonstration mode only.'}</strong> ${cloudAuth ? 'Your password is handled by Supabase Auth and never stored by Atlas Learn.' : 'No secure authentication service is configured. Do not enter a password or sensitive information.'}</div>
+    <h2>${cloudAuth ? (authMode === 'signup' ? 'Create your Atlas Learn account' : 'Welcome back, learner') : (authMode === 'signup' ? 'Set up your demo profile' : 'Welcome back, learner')}</h2><p>${cloudAuth ? 'Sign in to use the persistent AI Tutor and conversation history.' : 'This creates a local display profile only. Your progress stays in this browser and is not synced or protected by an account.'}</p>
     <form id="demo-profile-form"><div class="field"><label for="demo-name">Display name</label><input id="demo-name" name="name" maxlength="40" autocomplete="nickname" value="${state.profile.signedIn ? escapeHTML(state.profile.name) : ''}" required placeholder="What should we call you?"></div>
-    <div class="field"><label for="demo-email">Email (optional)</label><input id="demo-email" name="email" type="email" maxlength="120" autocomplete="email" value="${state.profile.signedIn ? escapeHTML(state.profile.email) : ''}" placeholder="Only displayed in this browser"></div>
-    <button type="submit" class="primary-button">${authMode === 'signup' ? 'Create local demo profile' : 'Continue in demo mode'} ${icons.arrow}</button></form>
-    <div class="auth-switch">${authMode === 'signup' ? 'Already have a local profile?' : 'New to Atlas Learn?'} <button type="button" data-auth-switch>${authMode === 'signup' ? 'Continue with this browser' : 'Set up demo profile'}</button></div>
-    <div class="auth-switch"><button type="button" data-forgot-password>Forgot password?</button> Password recovery requires a secure account provider.</div>
+    <div class="field"><label for="demo-email">Email ${cloudAuth ? '' : '(optional)'}</label><input id="demo-email" name="email" type="email" maxlength="120" autocomplete="email" value="${state.profile.signedIn ? escapeHTML(state.profile.email) : ''}" ${cloudAuth ? 'required' : ''} placeholder="you@example.com"></div>
+    ${cloudAuth ? '<div class="field"><label for="demo-password">Password</label><input id="demo-password" name="password" type="password" minlength="8" autocomplete="current-password" required placeholder="At least 8 characters"></div>' : ''}
+    <button type="submit" class="primary-button">${cloudAuth ? (authMode === 'signup' ? 'Create secure account' : 'Sign in securely') : (authMode === 'signup' ? 'Create local demo profile' : 'Continue in demo mode')} ${icons.arrow}</button></form>
+    <div class="auth-switch">${authMode === 'signup' ? 'Already have an account?' : 'New to Atlas Learn?'} <button type="button" data-auth-switch>${authMode === 'signup' ? 'Sign in' : 'Create an account'}</button></div>
+    <div class="auth-switch"><button type="button" data-forgot-password>Forgot password?</button> ${cloudAuth ? 'We will email a secure reset link.' : 'Password recovery requires a secure account provider.'}</div>
     <div class="auth-switch"><button type="button" data-page="home">Continue as guest</button></div></section>`;
 }
 
@@ -2452,6 +2460,7 @@ function render() {
   main.innerHTML = page();
   document.getElementById('globe-dots')?.insertAdjacentHTML('beforeend', globeDots());
   bindPageInteractions();
+  if (activePage === 'ai-chat' && !aiCloudConversationsLoaded && !aiCloudLoading) loadAIConversations();
   if (activePage === 'ai-chat' && (aiConversation.length || aiPending)) {
     const messages = document.getElementById('ai-chat-messages');
     if (messages) messages.scrollTop = messages.scrollHeight;
@@ -2645,12 +2654,13 @@ function topicPage() {
 
 function aiChatPage() {
   return `<section class="ai-chat-shell" aria-label="Atlas AI conversation">
+      <aside class="ai-history-panel" aria-label="Conversation history"><div class="ai-history-head"><strong>Conversations</strong><button type="button" class="text-button" data-ai-new>New</button></div>${aiCloudLoading ? '<p class="ai-history-status">Loading history…</p>' : aiCloudConversations.length ? `<div class="ai-history-list">${aiCloudConversations.map(item => `<div class="ai-history-row"><button type="button" class="ai-history-item ${item.id === aiConversationId ? 'active' : ''}" data-ai-open="${escapeHTML(item.id)}"><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.topic || item.subject || 'Atlas AI')} · ${formatDate(item.updated_at)}</small></button><button type="button" class="ai-history-action" data-ai-rename="${escapeHTML(item.id)}" aria-label="Rename conversation">Rename</button><button type="button" class="ai-history-action danger-text" data-ai-delete="${escapeHTML(item.id)}" aria-label="Delete conversation">Delete</button></div>`).join('')}</div>` : '<p class="ai-history-status">Sign in to save and reopen conversations.</p>'}</aside>
       <header class="ai-chat-header">
         <div class="ai-chat-identity">
           <span class="ai-chat-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 14.1 9.9 21 12l-6.9 2.1L12 21l-2.1-6.9L3 12l6.9-2.1L12 3Z"/><path d="m19 3 .7 2.3L22 6l-2.3.7L19 9l-.7-2.3L16 6l2.3-.7L19 3Z"/></svg></span>
           <div><h1>Atlas AI</h1><p>Your Intelligent Learning Assistant</p></div>
         </div>
-        <button type="button" class="secondary-button ai-level-button" data-ai-level title="Change explanation level">${AtlasAI.levelLabel(aiLevel)} ${icons.sparkles}</button>
+         <div class="ai-header-actions"><button type="button" class="secondary-button ai-level-button" data-ai-level title="Change explanation level">${AtlasAI.levelLabel(aiLevel)} ${icons.sparkles}</button><button type="button" class="secondary-button" data-ai-new>New conversation</button></div>
       </header>
       <div class="ai-chat-messages" id="ai-chat-messages" aria-live="polite">
         ${aiConversation.length ? aiConversation.map(message => aiMessageBubble(message)).join('') : `<div class="ai-welcome"><div class="ai-welcome-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 14.1 9.9 21 12l-6.9 2.1L12 21l-2.1-6.9L3 12l6.9-2.1L12 3Z"/><path d="m19 3 .7 2.3L22 6l-2.3.7L19 9l-.7-2.3L16 6l2.3-.7L19 3Z"/></svg></div><h2>Hello! I'm Atlas AI.</h2><p>Your personal learning assistant. Ask me questions, explore difficult topics and improve your understanding.</p><div class="ai-suggestions" aria-label="Try asking Atlas AI">
@@ -2661,21 +2671,73 @@ function aiChatPage() {
         </div></div>`}
       </div>
       <div class="ai-chat-input-area">
-        <label class="search-box ai-search-box">${icons.chat}<input id="ai-chat-input" type="text" value="" placeholder="Ask Atlas AI anything..." aria-label="Ask Atlas AI"></label>
+         <label class="search-box ai-search-box">${icons.chat}<textarea id="ai-chat-input" rows="1" placeholder="Ask Atlas AI anything..." aria-label="Ask Atlas AI">${escapeHTML(aiInputValue)}</textarea></label>
         <button type="button" class="primary-button" data-ai-send ${aiPending ? 'disabled' : ''}>Send ${icons.arrow}</button>
+         ${aiPending ? '<button type="button" class="secondary-button" data-ai-stop>Stop</button>' : ''}
       </div>
       ${aiPending ? `<div class="ai-loading" role="status" aria-live="polite"><span>Atlas AI is thinking</span><i></i><i></i><i></i></div>` : ''}
-      ${aiLastError ? `<div class="ai-error" role="alert"><span aria-hidden="true">!</span>${escapeHTML(aiLastError)}</div>` : ''}
+      ${aiLastError ? `<div class="ai-error" role="alert"><span aria-hidden="true">!</span>${escapeHTML(aiLastError)}${aiLastQuestion ? '<button type="button" class="text-button" data-ai-retry>Retry</button>' : ''}</div>` : ''}
       <div class="ai-chat-footer"><small>Atlas AI responses are AI-generated and clearly labelled. They are not academically verified. For critical academic work, consult a teacher, tutor or trusted textbook.</small></div>
     </section>`;
 }
 
 function aiMessageBubble(message) {
   const own = message.role === 'user';
-  return `<div class="ai-message ${own ? 'ai-message-own' : 'ai-message-ai'}"><div class="ai-message-bubble">${escapeHTML(message.content)}${message.aiGenerated ? `<div class="ai-badge">AI-generated · not verified</div>` : ''}</div><div class="ai-message-meta">${own ? 'You' : 'Atlas AI'} · ${new Date(message.at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></div>`;
+  const content = own ? escapeHTML(message.content).replace(/\n/g, '<br>') : formatAIMessageContent(message.content);
+  return `<div class="ai-message ${own ? 'ai-message-own' : 'ai-message-ai'}"><div class="ai-message-bubble">${content}${message.aiGenerated ? `<div class="ai-badge">AI-generated · not verified</div>` : ''}${own ? '' : '<button type="button" class="ai-copy-button" data-ai-copy>Copy</button>'}</div><div class="ai-message-meta">${own ? 'You' : 'Atlas AI'} · ${new Date(message.at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></div>`;
+}
+
+function formatAIMessageContent(content) {
+  let html = escapeHTML(content);
+  html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+  html = html.replace(/^###\s*(.+)$/gm, '<h4>$1</h4>').replace(/^##\s*(.+)$/gm, '<h3>$1</h3>').replace(/^#\s*(.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+  return html;
+}
+
+async function loadAIConversations() {
+  if (!window.AtlasCloud?.isConfigured?.()) { aiCloudConversationsLoaded = true; return; }
+  aiCloudLoading = true; render();
+  const result = await window.AtlasCloud.listConversations();
+  aiCloudLoading = false; aiCloudConversationsLoaded = true;
+  if (result.error) aiLastError = result.error.message || 'Conversation history is unavailable.';
+  else aiCloudConversations = result.data || [];
+  render();
+}
+
+async function openAIConversation(id) {
+  const result = await window.AtlasCloud.getConversation(id);
+  if (result.error) { aiLastError = 'That conversation could not be opened.'; render(); return; }
+  aiConversationId = id;
+  aiConversation = (result.data?.ai_messages || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).map(item => ({ role: item.role, content: item.content, aiGenerated: item.role === 'assistant', at: item.created_at }));
+  aiLastError = null; aiInputValue = ''; render();
 }
 
 function bindPageInteractions() {
+  document.querySelectorAll('[data-ai-new]').forEach(button => button.addEventListener('click', () => {
+    aiConversationId = ''; aiConversation = []; aiLastError = null; aiInputValue = ''; render();
+  }));
+  document.querySelectorAll('[data-ai-open]').forEach(button => button.addEventListener('click', () => openAIConversation(button.dataset.aiOpen)));
+  document.querySelectorAll('[data-ai-rename]').forEach(button => button.addEventListener('click', async () => {
+    const current = aiCloudConversations.find(item => item.id === button.dataset.aiRename);
+    const title = window.prompt('Conversation title:', current?.title || 'New conversation');
+    if (!title) return;
+    const result = await window.AtlasCloud.renameConversation(button.dataset.aiRename, title);
+    if (result.error) showToast('Conversation could not be renamed.', 'warning'); else { aiCloudConversationsLoaded = false; loadAIConversations(); }
+  }));
+  document.querySelectorAll('[data-ai-delete]').forEach(button => button.addEventListener('click', async () => {
+    if (!window.confirm('Delete this conversation? This cannot be undone.')) return;
+    const result = await window.AtlasCloud.deleteConversation(button.dataset.aiDelete);
+    if (result.error) showToast('Conversation could not be deleted.', 'warning');
+    else { if (aiConversationId === button.dataset.aiDelete) { aiConversationId = ''; aiConversation = []; } aiCloudConversationsLoaded = false; loadAIConversations(); render(); }
+  }));
+  document.querySelectorAll('[data-ai-copy]').forEach(button => button.addEventListener('click', async () => {
+    const bubble = button.closest('.ai-message-bubble');
+    const copy = bubble ? [...bubble.childNodes].filter(node => node !== button && node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('') || bubble.innerText.replace('Copy', '').trim() : '';
+    try { await navigator.clipboard.writeText(copy); showToast('Response copied.', 'success'); } catch { showToast('Copy is unavailable in this browser.', 'warning'); }
+  }));
+  document.querySelector('[data-ai-stop]')?.addEventListener('click', () => { aiRequestToken += 1; aiPending = false; aiLastError = 'Generation stopped.'; render(); });
+  document.querySelector('[data-ai-retry]')?.addEventListener('click', () => { aiInputValue = aiLastQuestion; aiLastError = null; render(); document.querySelector('[data-ai-send]')?.click(); });
   document.querySelectorAll('[data-analytics-filter]').forEach(control => control.addEventListener('change', () => {
     const key = control.dataset.analyticsFilter;
     analyticsFilters[key] = control.value;
@@ -3165,13 +3227,20 @@ function bindPageInteractions() {
     state.profile.avatar = initials(state.profile.name);
     persist(); render(); showToast('Your local profile has been updated.', 'success');
   });
-  document.getElementById('demo-profile-form')?.addEventListener('submit', event => {
+  document.getElementById('demo-profile-form')?.addEventListener('submit', async event => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const name = String(form.get('name')).trim();
     const email = String(form.get('email')).trim();
+    const password = String(form.get('password') || '');
     if (name.length < 2) { showToast('Please enter a display name with at least 2 characters.', 'warning'); return; }
     if (email && !event.currentTarget.elements.email.checkValidity()) { showToast('Please enter a valid email address.', 'warning'); return; }
+    if (window.AtlasCloud?.isConfigured?.()) {
+      const result = authMode === 'signup' ? await window.AtlasCloud.signUp(email, password, name) : await window.AtlasCloud.signIn(email, password);
+      if (result.error) { showToast(result.error.message || 'Secure authentication failed.', 'warning'); return; }
+      Object.assign(state.profile, { name: name.slice(0, 40), email: email.slice(0, 120), avatar: initials(name), signedIn: true });
+      persist(); navigate('home'); showToast(authMode === 'signup' ? 'Account created. Check your email if confirmation is enabled.' : 'You are signed in.', 'success'); return;
+    }
     Object.assign(state.profile, { name: name.slice(0, 40), email: email.slice(0, 120), avatar: initials(name), signedIn: true });
     persist(); navigate('home'); showToast('Demo profile ready. No account or password was created.', 'success');
   });
@@ -3250,7 +3319,7 @@ function bindPageInteractions() {
 
   const aiInput = document.getElementById('ai-chat-input');
   aiInput?.addEventListener('input', event => { aiInputValue = event.target.value; });
-  aiInput?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); document.querySelector('[data-ai-send]')?.click(); } });
+  aiInput?.addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); document.querySelector('[data-ai-send]')?.click(); } });
   document.querySelectorAll('[data-ai-prompt]').forEach(button => button.addEventListener('click', () => {
     const input = document.getElementById('ai-chat-input');
     if (!input) return;
@@ -3262,16 +3331,17 @@ function bindPageInteractions() {
     const input = document.getElementById('ai-chat-input');
     const text = input ? input.value.trim() : '';
     if (!text || aiPending) return;
-    aiPending = true; aiLastError = null;
+    aiPending = true; aiLastError = null; aiLastQuestion = text; aiInputValue = ''; const requestToken = ++aiRequestToken;
     aiConversation.push({ role: 'user', content: text, at: Date.now() });
     render();
-    input.value = '';
     try {
-      const result = await AtlasAI.explainQuestion(text, { subject: activeSubjectId, topic: activeTopicId, level: aiLevel, quiz: askAtlasContext }, aiLevel);
+      const result = await AtlasAI.chat(text, aiConversationId, { subject: activeSubjectId, topic: activeTopicId }, aiLevel);
+      if (requestToken !== aiRequestToken) return;
       if (result.error) { aiLastError = result.error; }
       else if (result.data) {
-        const content = formatAIResponse(result.data);
-        aiConversation.push({ role: 'assistant', content, aiGenerated: true, verified: false, at: Date.now() });
+        aiConversationId = result.data.conversation?.id || aiConversationId;
+        aiConversation.push({ role: 'assistant', content: result.data.message?.content || '', aiGenerated: true, verified: false, at: Date.now() });
+        aiCloudConversationsLoaded = false;
       }
     } catch (error) { aiLastError = 'Atlas AI encountered an error.'; }
     aiPending = false;
@@ -3350,7 +3420,7 @@ function formatAIDiscovery(data) {
   return html;
 }
 
-document.addEventListener('click', event => {
+document.addEventListener('click', async event => {
   const membershipFeatureButton = event.target.closest('[data-membership-feature]');
   if (membershipFeatureButton) {
     openMembershipGate(membershipFeatureButton.dataset.membershipFeature);
@@ -3543,6 +3613,7 @@ document.addEventListener('click', event => {
   if (start) { startQuiz(start.dataset.startQuiz); return; }
   const signOut = event.target.closest('[data-sign-out]');
   if (signOut) {
+    if (window.AtlasCloud?.isConfigured?.()) { await window.AtlasCloud.signOut(); }
     if (state.profile.signedIn) {
       state.profile.signedIn = false;
       state.profile.name = 'Guest learner';
@@ -3552,7 +3623,13 @@ document.addEventListener('click', event => {
     return;
   }
   if (event.target.closest('[data-auth-switch]')) { authMode = authMode === 'signin' ? 'signup' : 'signin'; render(); return; }
-  if (event.target.closest('[data-forgot-password]')) { showToast('Password reset needs a secure authentication provider; none is configured.', 'warning'); return; }
+  if (event.target.closest('[data-forgot-password]')) {
+    if (!window.AtlasCloud?.isConfigured?.()) { showToast('Password reset needs a secure authentication provider; none is configured.', 'warning'); return; }
+    const email = window.prompt('Enter your Atlas Learn account email:');
+    if (!email) return;
+    const result = await window.AtlasCloud.resetPassword(email, `${location.origin}${location.pathname}#auth`);
+    showToast(result.error ? (result.error.message || 'Password reset failed.') : 'Check your email for a secure reset link.', result.error ? 'warning' : 'success'); return;
+  }
   if (event.target.closest('[data-upgrade]')) { showToast('Membership payments and activation are not configured. No payment information was collected.', 'warning'); }
 });
 
@@ -3615,6 +3692,14 @@ if (state.stats.lastActiveDate && state.stats.lastActiveDate !== todayKey() && s
 }
 render();
 if (location.hash) renderFromLocation();
+if (window.AtlasCloud?.isConfigured?.()) {
+  const cloudClient = window.AtlasCloud.getClient();
+  cloudClient.auth.getSession().then(({ data }) => {
+    const user = data.session?.user;
+    if (user) { state.profile.signedIn = true; state.profile.email = user.email || ''; state.profile.name = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Learner'; state.profile.avatar = initials(state.profile.name); persist(); render(); }
+  });
+  cloudClient.auth.onAuthStateChange((_event, session) => { if (!session) { state.profile.signedIn = false; persist(); } });
+}
 let hasSavedState = false;
 try {
   hasSavedState = localStorage.getItem(storageKey) !== null;

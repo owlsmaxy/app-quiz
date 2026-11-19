@@ -141,6 +141,33 @@ create table public.subscriptions (
   updated_at timestamptz not null default now()
 );
 
+-- AI Tutor persistence and server-side usage accounting.
+create table public.ai_conversations (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null default 'New conversation' check (char_length(title) between 1 and 120),
+  subject text,
+  topic text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.ai_messages (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.ai_conversations(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  role text not null check (role in ('user', 'assistant')),
+  content text not null check (char_length(content) between 1 and 30000),
+  created_at timestamptz not null default now()
+);
+
+create table public.ai_usage_daily (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  usage_date date not null default current_date,
+  request_count integer not null default 0 check (request_count >= 0),
+  primary key (user_id, usage_date)
+);
+
 create index courses_subject_id_idx on public.courses(subject_id);
 create index topics_course_id_idx on public.topics(course_id);
 create index topics_parent_topic_id_idx on public.topics(parent_topic_id);
@@ -149,6 +176,8 @@ create index questions_topic_visibility_idx on public.questions(topic_id, visibi
 create index quiz_attempts_user_completed_idx on public.quiz_attempts(user_id, completed_at desc);
 create index learning_progress_user_updated_idx on public.learning_progress(user_id, last_seen_at desc);
 create index certificates_user_issued_idx on public.certificates(user_id, issued_at desc);
+create index ai_conversations_user_updated_idx on public.ai_conversations(user_id, updated_at desc);
+create index ai_messages_conversation_created_idx on public.ai_messages(conversation_id, created_at);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -168,6 +197,7 @@ create trigger topics_set_updated_at before update on public.topics for each row
 create trigger materials_set_updated_at before update on public.topic_materials for each row execute function public.set_updated_at();
 create trigger questions_set_updated_at before update on public.questions for each row execute function public.set_updated_at();
 create trigger subscriptions_set_updated_at before update on public.subscriptions for each row execute function public.set_updated_at();
+create trigger ai_conversations_set_updated_at before update on public.ai_conversations for each row execute function public.set_updated_at();
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -197,6 +227,9 @@ alter table public.achievements enable row level security;
 alter table public.user_achievements enable row level security;
 alter table public.certificates enable row level security;
 alter table public.subscriptions enable row level security;
+alter table public.ai_conversations enable row level security;
+alter table public.ai_messages enable row level security;
+alter table public.ai_usage_daily enable row level security;
 
 create policy profiles_select_own on public.profiles for select to authenticated using ((select auth.uid()) = id);
 create policy profiles_update_own on public.profiles for update to authenticated using ((select auth.uid()) = id) with check ((select auth.uid()) = id);
@@ -218,7 +251,48 @@ create policy user_achievements_select_own on public.user_achievements for selec
 create policy certificates_select_own on public.certificates for select to authenticated using ((select auth.uid()) = user_id);
 create policy subscriptions_select_own on public.subscriptions for select to authenticated using ((select auth.uid()) = user_id);
 
+create policy ai_conversations_select_own on public.ai_conversations for select to authenticated using ((select auth.uid()) = user_id);
+create policy ai_conversations_insert_own on public.ai_conversations for insert to authenticated with check ((select auth.uid()) = user_id);
+create policy ai_conversations_update_own on public.ai_conversations for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy ai_conversations_delete_own on public.ai_conversations for delete to authenticated using ((select auth.uid()) = user_id);
+create policy ai_messages_select_own on public.ai_messages for select to authenticated using ((select auth.uid()) = user_id);
+create policy ai_messages_insert_own on public.ai_messages for insert to authenticated with check ((select auth.uid()) = user_id and exists (select 1 from public.ai_conversations c where c.id = conversation_id and c.user_id = (select auth.uid())));
+create policy ai_messages_delete_own on public.ai_messages for delete to authenticated using ((select auth.uid()) = user_id);
+
+-- Usage rows are readable only by the owner; writes go through the guarded RPC below.
+create policy ai_usage_select_own on public.ai_usage_daily for select to authenticated using ((select auth.uid()) = user_id);
+
 revoke insert, update, delete on public.subscriptions from anon, authenticated;
 revoke insert, update, delete on public.user_achievements from anon, authenticated;
 revoke insert, update, delete on public.certificates from anon, authenticated;
 revoke insert, update, delete on public.achievements from anon, authenticated;
+revoke insert, update, delete on public.ai_usage_daily from anon, authenticated;
+
+create or replace function public.consume_ai_request(p_free_limit integer default 20, p_premium_limit integer default 200)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  current_count integer;
+  allowed_limit integer;
+  premium boolean;
+begin
+  if current_user_id is null then raise exception 'Authentication required'; end if;
+  premium := exists (select 1 from public.subscriptions s where s.user_id = current_user_id and s.plan <> 'free' and s.status in ('trialing', 'active') and (s.current_period_end is null or s.current_period_end > now()));
+  allowed_limit := case when premium then greatest(1, p_premium_limit) else greatest(1, p_free_limit) end;
+  insert into public.ai_usage_daily(user_id, usage_date, request_count)
+  values (current_user_id, current_date, 1)
+  on conflict (user_id, usage_date) do update set request_count = public.ai_usage_daily.request_count + 1
+  returning request_count into current_count;
+  if current_count > allowed_limit then
+    update public.ai_usage_daily set request_count = request_count - 1 where user_id = current_user_id and usage_date = current_date;
+    return jsonb_build_object('allowed', false, 'used', current_count - 1, 'limit', allowed_limit, 'premium', premium);
+  end if;
+  return jsonb_build_object('allowed', true, 'used', current_count, 'limit', allowed_limit, 'premium', premium);
+end;
+$$;
+revoke all on function public.consume_ai_request(integer, integer) from public;
+grant execute on function public.consume_ai_request(integer, integer) to authenticated;

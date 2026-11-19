@@ -45,3 +45,14 @@
 ## Configuration boundary
 
 The repository contains placeholders only. Do not commit `.env`, Supabase service-role keys, AI keys, or payment credentials. Live Auth, RLS queries, and restore verification cannot be honestly marked tested until a Supabase project is configured.
+
+## AI Tutor upgrade status
+
+Implemented in this repository:
+
+- `ai_conversations`, `ai_messages`, and `ai_usage_daily` with ownership RLS and guarded daily quota consumption.
+- `supabase/functions/ai-tutor/index.ts` with authenticated requests, bounded context, Groq provider mapping, timeouts, safe provider errors, and message persistence.
+- `supabase-client.js` with browser-safe Auth, Edge Function invocation, conversation history, rename, and delete operations.
+- The existing chat UI with persistent history, new conversations, safe formatted rendering, copy, retry, stop/ignore-stale-response behavior, Shift+Enter, and clear configuration errors.
+
+Live provider behavior, Auth, RLS isolation, quota enforcement, and Edge Function deployment still require a real Supabase project, a Groq key, and manual deployment. They are deliberately not marked as tested locally.

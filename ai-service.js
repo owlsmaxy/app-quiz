@@ -203,6 +203,21 @@
     return callAI('discover-topic', payload, () => demoGenerateTopicOutline(query, level));
   }
 
+  async function chat(question, conversationId, context = {}, level = 'intermediate') {
+    if (window.AtlasCloud?.isConfigured?.()) {
+      const response = await window.AtlasCloud.chat({
+        question: String(question || '').trim(),
+        conversationId: conversationId || null,
+        subject: context.subject || '',
+        topic: context.topic || '',
+        level
+      });
+      if (response.error) return { aiGenerated: false, verified: false, error: response.error.message || 'Atlas AI request failed.', data: null };
+      return { aiGenerated: true, verified: false, error: null, data: response.data };
+    }
+    return { aiGenerated: false, verified: false, error: 'Persistent AI Tutor is not configured. Add Supabase browser configuration and sign in.', data: null };
+  }
+
   async function callAI(action, payload, demoFallback) {
     const result = { aiGenerated: true, verified: false, error: null, data: null, usedDemo: false };
     if (!aiEnabled || !aiEndpoint) {
@@ -339,7 +354,7 @@
   window.AtlasAI = Object.freeze({
     getConfig, configure, canMakeRequest, timeUntilNextRequest,
     explanationLevels, levelLabel,
-    explainQuestion, getHint, explainAnswer, guidedProblemSolving, followUp, discoverTopic,
+    explainQuestion, getHint, explainAnswer, guidedProblemSolving, followUp, discoverTopic, chat,
     demoGenerateTopicOutline
   });
 })();

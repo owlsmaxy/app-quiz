@@ -3589,3 +3589,26 @@ input[type="checkbox"]:disabled {
     min-height: 48px;
   }
 }
+
+/* Persistent Atlas AI workspace */
+.ai-chat-shell { display:grid; grid-template-columns:220px minmax(0,1fr); grid-template-rows:auto minmax(0,1fr) auto auto auto; min-height:680px; overflow:hidden; }
+.ai-history-panel { grid-row:1 / span 5; border-right:1px solid var(--line); padding:18px 12px; background:var(--surface-soft); }
+.ai-history-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.ai-history-list { display:grid; gap:6px; }
+.ai-history-row { position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:2px; }
+.ai-history-row .ai-history-item { grid-column:1 / -1; padding-right:84px; }
+.ai-history-action { border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:.65rem; z-index:1; }
+.ai-history-row .ai-history-action:nth-last-child(2) { grid-column:2; grid-row:1; }
+.ai-history-row .ai-history-action:last-child { grid-column:3; grid-row:1; }
+.ai-history-item { display:grid; gap:4px; width:100%; padding:11px; border:1px solid transparent; border-radius:10px; background:transparent; color:var(--text); text-align:left; cursor:pointer; }
+.ai-history-item:hover,.ai-history-item.active { border-color:var(--line-strong); background:var(--surface); }
+.ai-history-item strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.82rem; }
+.ai-history-item small,.ai-history-status { color:var(--muted); font-size:.72rem; line-height:1.4; }
+.ai-chat-header { grid-column:2; }
+.ai-header-actions { display:flex; gap:8px; align-items:center; }
+.ai-search-box textarea { width:100%; resize:none; border:0; outline:0; background:transparent; color:inherit; font:inherit; padding:12px 0; min-height:24px; }
+.ai-message-bubble { position:relative; }
+.ai-message-bubble pre { margin:10px 0; padding:10px; overflow:auto; background:#0b1220; color:#e2e8f0; border-radius:8px; text-align:left; }
+.ai-copy-button { float:right; margin:0 0 6px 10px; border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:.72rem; }
+.ai-copy-button:hover { color:var(--accent); }
+@media (max-width: 860px) { .ai-chat-shell { grid-template-columns:1fr; } .ai-history-panel { grid-row:auto; border-right:0; border-bottom:1px solid var(--line); max-height:150px; overflow:auto; } .ai-history-list { display:flex; overflow:auto; } .ai-history-item { min-width:180px; } .ai-chat-header { grid-column:1; } }
