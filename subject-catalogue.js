@@ -1135,14 +1135,14 @@
                     const tText = `${topic.name} ${topic.description}`.toLocaleLowerCase();
                     if (tText.includes(term) && levelMatch && subjectMatch && !seenTopics.has(topic.id)) {
                       seenTopics.add(topic.id);
-                      results.topics.push({ ...topic, type: 'topic', subjectName: subject.name, courseName: course.name });
+                      results.topics.push({ ...topic, type: 'topic', subjectId: subject.id, subjectName: subject.name, courseId: course.id, courseName: course.name });
                     }
                     if (topic.lessons) {
                       for (const lesson of topic.lessons) {
                         const lText = `${lesson.title} ${lesson.content}`.toLocaleLowerCase();
                         if (lText.includes(term) && levelMatch && subjectMatch && !seenLessons.has(lesson.id)) {
                           seenLessons.add(lesson.id);
-                          results.lessons.push({ ...lesson, type: 'lesson', topicName: topic.name, subjectName: subject.name });
+                          results.lessons.push({ ...lesson, type: 'lesson', subjectId: subject.id, subjectName: subject.name, topicId: topic.id, topicName: topic.name, courseId: course.id });
                         }
                       }
                     }
@@ -1156,9 +1156,9 @@
     };
     collectSubjects(disciplines.flatMap(d => d.subjects));
     collectSubjects(customSubjects);
-    results.subjects.sort((a, b) => a.name.localeCompare(b.name)).slice(0, limit);
-    results.topics.sort((a, b) => a.name.localeCompare(b.name)).slice(0, limit);
-    results.lessons.sort((a, b) => a.title.localeCompare(b.title)).slice(0, limit);
+    results.subjects = results.subjects.sort((a, b) => a.name.localeCompare(b.name)).slice(0, limit);
+    results.topics = results.topics.sort((a, b) => a.name.localeCompare(b.name)).slice(0, limit);
+    results.lessons = results.lessons.sort((a, b) => a.title.localeCompare(b.title)).slice(0, limit);
     results.suggestions = [...new Set([...results.subjects.map(s => s.name), ...results.topics.map(t => t.name)])].slice(0, 8);
     return results;
   }

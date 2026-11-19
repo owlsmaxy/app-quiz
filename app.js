@@ -1974,7 +1974,8 @@ function bankQuizPage() {
       const selected = selectedOptions.includes(option);
       const isCorrect = Array.isArray(question.correctAnswer) ? question.correctAnswer.includes(option) : question.correctAnswer === option;
       const className = showFeedback && isCorrect ? 'correct' : showFeedback && selected ? 'incorrect' : '';
-      return `<button type="button" class="answer-option ${className} ${selected ? 'selected' : ''}" data-bank-option="${escapeHTML(option)}" aria-pressed="${selected}"><span class="answer-key">${question.type === 'multiple-answer' ? selected ? '✓' : '+' : String.fromCharCode(65 + index)}</span><span>${escapeHTML(option)}</span></button>`;
+      const selectionRole = question.type === 'multiple-answer' ? 'checkbox' : 'radio';
+      return `<button type="button" class="answer-option ${className} ${selected ? 'selected' : ''}" data-bank-option="${escapeHTML(option)}" role="${selectionRole}" aria-checked="${selected}" aria-pressed="${selected}"><span class="answer-key" aria-hidden="true">${question.type === 'multiple-answer' ? selected ? '✓' : '+' : String.fromCharCode(65 + index)}</span><span>${escapeHTML(option)}</span></button>`;
     }).join('')}</div>`;
   } else {
     answerControl = `<label class="field bank-typed-answer"><span>${question.type === 'numerical' ? 'Your numerical answer' : 'Your answer'}</span><input id="bank-typed-answer" type="${question.type === 'numerical' ? 'number' : 'text'}" ${question.type === 'numerical' ? 'step="any"' : 'maxlength="160"'} value="${escapeHTML(response ?? '')}" autocomplete="off"></label>`;
@@ -2010,7 +2011,7 @@ function quizPage() {
         let klass = '';
         if (answered && correct) klass = 'correct';
         else if (answered && selected) klass = 'incorrect';
-        return `<button type="button" class="answer-option ${klass}" data-answer="${index}" ${answered ? 'disabled' : ''}><span class="answer-key">${String.fromCharCode(65 + index)}</span><span>${escapeHTML(option)}</span></button>`;
+        return `<button type="button" class="answer-option ${klass}" data-answer="${index}" role="radio" aria-checked="${selected}" aria-pressed="${selected}" ${answered ? 'disabled' : ''}><span class="answer-key" aria-hidden="true">${String.fromCharCode(65 + index)}</span><span>${escapeHTML(option)}</span></button>`;
       }).join('')}</div>
       <div class="answer-explanation ${quizSession.selected !== null ? `visible ${quizSession.selected === question.answer ? '' : 'wrong'}` : ''}" id="answer-explanation">${quizSession.selected === question.answer ? 'That’s right! ' : 'Not quite. '} ${escapeHTML(question.explanation)}</div>
       <div class="quiz-controls"><button type="button" class="secondary-button" data-quiz-back ${quizSession.current === 0 ? 'disabled' : ''}>Previous</button><button type="button" class="secondary-button" data-ask-atlas-quiz>Ask Atlas AI ${icons.chat}</button><button type="button" class="primary-button" data-quiz-next ${quizSession.selected === null ? 'disabled' : ''}>${quizSession.current === quizSession.questions.length - 1 ? 'See results' : 'Next question'} ${icons.arrow}</button></div>
@@ -2616,8 +2617,8 @@ function searchPage() {
     <div class="search-hero"><label class="search-box search-hero-box">${icons.search}<input id="universal-search" type="search" value="${escapeHTML(universalSearchQuery)}" placeholder="Search for any subject, topic or concept..." aria-label="Universal search"></label>${query ? `<button class="secondary-button" data-clear-universal-search>Clear</button>` : ''}</div>
     ${query ? `<div class="search-results">
       ${results.subjects.length ? `<section class="search-section"><h3>Subjects</h3><div class="search-subject-list">${results.subjects.map(subject => `<article class="search-result-item" data-open-subject="${escapeHTML(subject.id)}"><strong>${escapeHTML(subject.name)}</strong><span>${escapeHTML(SubjectCatalogue.levelLabels[subject.level] || subject.level)} · ${escapeHTML(subject.description)}</span></article>`).join('')}</div></section>` : ''}
-      ${results.topics.length ? `<section class="search-section"><h3>Topics</h3><div class="search-topic-list">${results.topics.map(topic => `<article class="search-result-item" data-open-topic="${escapeHTML(topic.id)}"><strong>${escapeHTML(topic.name)}</strong><span>${escapeHTML(topic.subjectName)} · ${escapeHTML(topic.courseName)}</span></article>`).join('')}</div></section>` : ''}
-      ${results.lessons.length ? `<section class="search-section"><h3>Lessons</h3><div class="search-lesson-list">${results.lessons.map(lesson => `<article class="search-result-item" data-open-lesson="${escapeHTML(lesson.id)}"><strong>${escapeHTML(lesson.title)}</strong><span>${escapeHTML(lesson.topicName)} · ${escapeHTML(lesson.subjectName)}</span></article>`).join('')}</div></section>` : ''}
+      ${results.topics.length ? `<section class="search-section"><h3>Topics</h3><div class="search-topic-list">${results.topics.map(topic => `<article class="search-result-item" data-open-topic="${escapeHTML(topic.id)}" data-subject-id="${escapeHTML(topic.subjectId || '')}"><strong>${escapeHTML(topic.name)}</strong><span>${escapeHTML(topic.subjectName)} · ${escapeHTML(topic.courseName)}</span></article>`).join('')}</div></section>` : ''}
+      ${results.lessons.length ? `<section class="search-section"><h3>Lessons</h3><div class="search-lesson-list">${results.lessons.map(lesson => `<article class="search-result-item" data-open-lesson="${escapeHTML(lesson.id)}" data-subject-id="${escapeHTML(lesson.subjectId || '')}" data-topic-id="${escapeHTML(lesson.topicId || '')}"><strong>${escapeHTML(lesson.title)}</strong><span>${escapeHTML(lesson.topicName)} · ${escapeHTML(lesson.subjectName)}</span></article>`).join('')}</div></section>` : ''}
       ${!results.subjects.length && !results.topics.length && !results.lessons.length ? `<div class="empty-state"><p>No verified content matches "<span>${escapeHTML(query)}</span>".</p><button class="primary-button" data-ai-discover="${escapeHTML(query)}">Ask Atlas AI to generate an outline ${icons.sparkles}</button></div>` : ''}
     </div>` : ''}
     ${history.length ? `<section class="search-history"><h3>Recent searches</h3><div class="search-history-list">${history.map(item => `<button class="history-chip" data-search-history="${escapeHTML(item)}">${escapeHTML(item)}</button>`).join('')}<button class="text-button" data-clear-history>Clear history</button></div></section>` : ''}
@@ -3175,11 +3176,21 @@ function bindPageInteractions() {
     persist(); navigate('home'); showToast('Demo profile ready. No account or password was created.', 'success');
   });
 
-  const subjectSearch = document.getElementById('subject-search');
-  subjectSearch?.addEventListener('input', event => { subjectSearchQuery = event.target.value; render(); });
-
-  const universalSearch = document.getElementById('universal-search');
-  universalSearch?.addEventListener('input', event => { universalSearchQuery = event.target.value; render(); });
+  const bindSearchWithFocus = (id, update) => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.addEventListener('input', event => {
+      const value = event.target.value;
+      const position = event.target.selectionStart;
+      update(value);
+      render();
+      const next = document.getElementById(id);
+      next?.focus();
+      if (typeof position === 'number') next?.setSelectionRange(position, position);
+    });
+  };
+  bindSearchWithFocus('subject-search', value => { subjectSearchQuery = value; });
+  bindSearchWithFocus('universal-search', value => { universalSearchQuery = value; });
 
   document.querySelectorAll('[data-open-subject]').forEach(button => button.addEventListener('click', () => {
     activeSubjectId = button.dataset.openSubject;
@@ -3189,11 +3200,15 @@ function bindPageInteractions() {
     navigate('explore-subjects');
   }));
   document.querySelectorAll('[data-open-topic]').forEach(button => button.addEventListener('click', () => {
-    const subject = SubjectCatalogue.allSubjects().find(s => s.name === button.closest('.search-result-item')?.querySelector('span')?.textContent?.split(' · ')[0]);
+    activeSubjectId = button.dataset.subjectId || '';
     activeTopicId = button.dataset.openTopic;
+    activeSubtopicId = '';
+    activeLessonId = '';
     navigate('topic');
   }));
   document.querySelectorAll('[data-open-lesson]').forEach(button => button.addEventListener('click', () => {
+    activeSubjectId = button.dataset.subjectId || '';
+    activeTopicId = button.dataset.topicId || '';
     activeLessonId = button.dataset.openLesson;
     navigate('topic');
   }));
@@ -3231,8 +3246,7 @@ function bindPageInteractions() {
     render();
   });
 
-  const topicSearch = document.getElementById('topic-search');
-  topicSearch?.addEventListener('input', event => { topicSearchQuery = event.target.value; render(); });
+  bindSearchWithFocus('topic-search', value => { topicSearchQuery = value; });
 
   const aiInput = document.getElementById('ai-chat-input');
   aiInput?.addEventListener('input', event => { aiInputValue = event.target.value; });

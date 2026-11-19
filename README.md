@@ -4,13 +4,35 @@ A responsive, browser-only learning and quiz experience built with plain HTML, C
 
 ## Run locally
 
-From this folder, start a local static web server:
+From this folder, start the app and API together (Node.js 18+):
 
 ```powershell
-python -m http.server 8000
+npm start
 ```
 
-Then open [http://localhost:8000](http://localhost:8000). If Python is not installed, open `index.html` directly in a modern browser.
+Then open [http://localhost:8000](http://localhost:8000). The API is available under `/api`.
+
+Useful API routes:
+
+- `GET /api/health`
+- `GET /api/education`
+- `GET /api/questions?gradeId=primary-grade-4&limit=10`
+- `GET /api/questions/:id`
+- `POST /api/quiz/grade` with `{ "questionId": "...", "answer": "..." }`
+
+The API currently uses the repository's sample data and keeps no user accounts or submissions. The first Supabase schema and RLS migration is now documented under `supabase/` but is not applied automatically. Add authentication and persistent storage before using it with real learners.
+
+## Server-side AI key
+
+The browser never receives or stores the AI API key. Copy `.env.example` to `.env` (or set environment variables in your hosting provider) and set `AI_ENDPOINT` and `AI_API_KEY` there. Start the server with those variables present. The browser calls `POST /api/ai`, and the server adds the provider authorization header.
+
+Never use a `NEXT_PUBLIC_`, `VITE_`, or other browser-exposed prefix for `AI_API_KEY`, and never commit `.env`.
+
+## Supabase foundation
+
+Review [supabase/README.md](supabase/README.md) and [docs/migration-and-recovery-plan.md](docs/migration-and-recovery-plan.md) before applying the migration. Set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` for browser-safe configuration only; keep `SUPABASE_SERVICE_ROLE_KEY` server-only. The migration stores passwords in Supabase Auth, enables RLS, protects user-owned rows, and prevents client-side subscription/achievement/certificate writes.
+
+The complete audit and staged rollout are recorded in [docs/audit-and-implementation-plan.md](docs/audit-and-implementation-plan.md).
 
 ## Included
 

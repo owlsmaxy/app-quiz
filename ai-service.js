@@ -3,9 +3,9 @@
   const rateLimitWindowMs = 60000;
   const rateLimitMax = 12;
   const aiRequestTimestamps = [];
-  let aiEndpoint = '';
-  let aiApiKey = '';
-  let aiEnabled = false;
+  // The browser only talks to our same-origin proxy. Provider credentials stay on the server.
+  let aiEndpoint = '/api/ai';
+  let aiEnabled = true;
 
   const explanationLevels = {
     beginner: 'Beginner',
@@ -18,16 +18,14 @@
       const raw = localStorage.getItem(aiConfigStorageKey);
       if (!raw) return;
       const saved = JSON.parse(raw);
-      aiEndpoint = typeof saved.aiEndpoint === 'string' ? saved.aiEndpoint.slice(0, 500) : '';
-      aiApiKey = typeof saved.aiApiKey === 'string' ? saved.aiApiKey.slice(0, 200) : '';
-      aiEnabled = Boolean(saved.aiEnabled);
+      aiEnabled = saved.aiEnabled === undefined ? true : Boolean(saved.aiEnabled);
     } catch (error) {
       console.error('Unable to read AI config.', error);
     }
   }
   function saveConfig() {
     try {
-      localStorage.setItem(aiConfigStorageKey, JSON.stringify({ aiEndpoint, aiApiKey, aiEnabled }));
+      localStorage.setItem(aiConfigStorageKey, JSON.stringify({ aiEnabled }));
       return true;
     } catch (error) {
       console.error('Unable to save AI config.', error);
@@ -35,14 +33,16 @@
     }
   }
   loadConfig();
+  // Migrate legacy browser storage and remove any previously saved client-side key.
+  saveConfig();
 
   function configure(endpoint, apiKey, enabled) {
-    aiEndpoint = typeof endpoint === 'string' ? endpoint : '';
-    aiApiKey = typeof apiKey === 'string' ? apiKey : '';
+    // endpoint and apiKey are intentionally ignored: secrets must never be client configuration.
+    aiEndpoint = '/api/ai';
     aiEnabled = Boolean(enabled);
     return saveConfig();
   }
-  function getConfig() { return { aiEndpoint, aiApiKey, aiEnabled }; }
+  function getConfig() { return { aiEndpoint, aiApiKey: '', aiEnabled }; }
 
   function canMakeRequest() {
     const now = Date.now();
@@ -223,7 +223,7 @@
       const timeout = setTimeout(() => controller.abort(), 30000);
       const response = await fetch(aiEndpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(aiApiKey ? { Authorization: `Bearer ${aiApiKey}` } : {}) },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
         signal: controller.signal
       });

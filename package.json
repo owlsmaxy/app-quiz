@@ -1,0 +1,13 @@
+{
+  "name": "atlas-learn-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Atlas Learn static app and HTTP API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
