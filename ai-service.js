@@ -215,7 +215,8 @@
       if (response.error) return { aiGenerated: false, verified: false, error: response.error.message || 'Atlas AI request failed.', data: null };
       return { aiGenerated: true, verified: false, error: null, data: response.data };
     }
-    return { aiGenerated: false, verified: false, error: 'Persistent AI Tutor is not configured. Add Supabase browser configuration and sign in.', data: null };
+    const missing = window.AtlasCloud?.getConfigStatus?.()?.missing || ['project URL', 'publishable/anon key'];
+    return { aiGenerated: false, verified: false, error: `Persistent AI Tutor is not configured. Add your ${missing.join(' and ')} in supabase-config.js, then sign in.`, data: null };
   }
 
   async function callAI(action, payload, demoFallback) {

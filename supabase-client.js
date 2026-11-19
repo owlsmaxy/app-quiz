@@ -1,10 +1,10 @@
 (() => {
-  const config = window.ATLAS_SUPABASE_CONFIG || {};
+  const config = window.AtlasSupabaseConfig || { url: '', publishableKey: '', status: { configured: false, missing: ['project URL', 'publishable/anon key'] } };
   let client = null;
-  if (window.supabase?.createClient && config.url && config.publishableKey) {
+  if (window.supabase?.createClient && config.status?.configured) {
     client = window.supabase.createClient(config.url, config.publishableKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
   }
-  const unavailable = () => ({ error: { message: 'Supabase is not configured. Add window.ATLAS_SUPABASE_CONFIG with your project URL and publishable key.' } });
+  const unavailable = () => ({ error: { message: `Supabase is not configured. Add your ${config.status?.missing?.join(' and ') || 'project URL and publishable key'} in supabase-config.js.` } });
   async function requireClient() { return client || unavailable(); }
   async function chat(payload) {
     const api = await requireClient();
@@ -34,5 +34,5 @@
   async function signIn(email, password) { if (client) return client.auth.signInWithPassword({ email, password }); return unavailable(); }
   async function signUp(email, password, displayName) { if (client) return client.auth.signUp({ email, password, options: { data: { display_name: displayName } } }); return unavailable(); }
   async function resetPassword(email, redirectTo) { if (client) return client.auth.resetPasswordForEmail(email, { redirectTo }); return unavailable(); }
-  window.AtlasCloud = Object.freeze({ isConfigured: () => Boolean(client), chat, listConversations, getConversation, renameConversation, deleteConversation, signOut, signIn, signUp, resetPassword, getClient: () => client });
+  window.AtlasCloud = Object.freeze({ isConfigured: () => Boolean(client), getConfigStatus: () => config.status, chat, listConversations, getConversation, renameConversation, deleteConversation, signOut, signIn, signUp, resetPassword, getClient: () => client });
 })();
