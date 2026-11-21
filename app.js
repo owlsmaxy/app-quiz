@@ -1980,6 +1980,7 @@ function updateBankResponse(response) {
     response,
     correct: AtlasQuestionBank.gradeAnswer(question, response)
   };
+  if (!quizSession.feedbackAnnounced) quizSession.feedbackAnnounced = [];
   if (quizSession.immediateFeedback && bankResponseComplete(response) && !quizSession.feedbackAnnounced[index]) {
     quizSession.feedbackAnnounced[index] = true;
     announceQuizFeedback(quizSession.answers[index].correct);
@@ -2012,6 +2013,7 @@ function bankQuizPage() {
   const unansweredCount = quizSession.questions.length - answeredCount;
   return `<div class="quiz-shell">
     <div class="quiz-topline"><button class="text-button" type="button" data-quiz-exit>← Exit quiz</button><span class="quiz-category-label">${escapeHTML(activeQuiz.title)} · ${quizSession.mode === 'assessment' ? 'Assessment' : 'Practice'}</span><span class="timer-pill ${quizSession.remaining <= 15 && quizSession.timerEnabled ? 'urgent' : ''}" id="quiz-timer">${icons.clock}<span>${quizSession.timerEnabled ? formatTimer(quizSession.remaining) : 'Untimed'}</span></span></div>
+    <div class="quiz-settings" style="margin-bottom:12px"><span style="color:var(--muted);font-size:.78rem">Feedback cues</span><label class="switch-label quiz-voice-toggle" style="display:inline-flex;align-items:center;gap:7px;margin-left:auto;color:var(--muted);font-size:.72rem;cursor:pointer"><input type="checkbox" id="voice-toggle" ${state.settings.voiceFeedback && !state.settings.feedbackMuted ? 'checked' : ''}> Voice feedback</label></div>
     <div class="quiz-progress-copy"><span>Question ${quizSession.current + 1} of ${quizSession.questions.length}</span><span>${answeredCount} answered · ${Math.round(progress)}% visited</span></div><div class="quiz-progress-track"><span style="width:${progress}%"></span></div>
     ${quizQuestionNavigation('bank')}
     <section class="question-card" aria-labelledby="question-title"><div class="question-number">QUESTION ${String(quizSession.current + 1).padStart(2, '0')} · ${escapeHTML(typeLabel.toUpperCase())} · ${escapeHTML(question.difficulty.toUpperCase())}</div><p class="question-instructions">${escapeHTML(question.instructions)}${question.type === 'multiple-answer' ? ' Select all that apply.' : ''}</p><h2 id="question-title">${escapeHTML(question.prompt)}</h2>
@@ -2046,7 +2048,7 @@ function quizPage() {
   const progress = (quizSession.current / quizSession.questions.length) * 100;
   return `<div class="quiz-shell">
     <div class="quiz-topline"><button class="text-button" type="button" data-page="explore">← Exit quiz</button><span class="quiz-category-label">${categoryFor(activeQuiz.category)?.emoji || ''} ${escapeHTML(activeQuiz.title)}</span><span class="timer-pill ${quizSession.remaining <= 15 && quizSession.timerEnabled ? 'urgent' : ''}" id="quiz-timer">${icons.clock}<span>${quizSession.timerEnabled ? formatTimer(quizSession.remaining) : 'Untimed'}</span></span></div>
-    <div class="quiz-settings"><span>Difficulty</span><select id="quiz-difficulty" aria-label="Quiz difficulty">${quizzes.filter(quiz => quiz.category === activeQuiz.category && (!quiz.premium || premiumQuizAccessAllowed(quiz))).map(quiz => `<option value="${quiz.id}" ${quiz.id === activeQuiz.id ? 'selected' : ''}>${quiz.difficulty}</option>`).join('')}</select><label class="switch-label" style="display:inline-flex;align-items:center;gap:7px;margin-left:auto;color:var(--muted);font-size:.72rem"><input type="checkbox" id="timer-toggle" ${quizSession.timerEnabled ? 'checked' : ''}> Timer</label></div>
+    <div class="quiz-settings"><span>Difficulty</span><select id="quiz-difficulty" aria-label="Quiz difficulty">${quizzes.filter(quiz => quiz.category === activeQuiz.category && (!quiz.premium || premiumQuizAccessAllowed(quiz))).map(quiz => `<option value="${quiz.id}" ${quiz.id === activeQuiz.id ? 'selected' : ''}>${quiz.difficulty}</option>`).join('')}</select><label class="switch-label" style="display:inline-flex;align-items:center;gap:7px;margin-left:auto;color:var(--muted);font-size:.72rem"><input type="checkbox" id="timer-toggle" ${quizSession.timerEnabled ? 'checked' : ''}> Timer</label><label class="switch-label quiz-voice-toggle" style="display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:.72rem;cursor:pointer"><input type="checkbox" id="voice-toggle" ${state.settings.voiceFeedback && !state.settings.feedbackMuted ? 'checked' : ''}> Voice</label></div>
     <div class="quiz-progress-copy"><span>Question ${quizSession.current + 1} of ${quizSession.questions.length}</span><span>${Math.round(progress)}% complete</span></div><div class="quiz-progress-track"><span style="width:${progress}%"></span></div>
     <section class="question-card" aria-labelledby="question-title"><div class="question-number">QUESTION ${String(quizSession.current + 1).padStart(2, '0')}</div><h2 id="question-title">${escapeHTML(question.prompt)}</h2>
       <div class="answer-list">${question.options.map((option, index) => {
@@ -2138,27 +2140,36 @@ function answerQuestion(index) {
   if (!quizSession || quizSession.selected !== null) return;
   quizSession.selected = index;
   const question = quizSession.questions[quizSession.current];
-  quizSession.answers[quizSession.current] = { ...question, selected: index, correct: index === question.answer };
-  announceQuizFeedback(index === question.answer);
-  if (state.settings.sound && !state.settings.feedbackMuted) playFeedback(index === question.answer);
+  const isCorrect = index === question.answer;
+  quizSession.answers[quizSession.current] = { ...question, selected: index, correct: isCorrect };
+  if (!quizSession.feedbackAnnounced) quizSession.feedbackAnnounced = [];
+  if (!quizSession.feedbackAnnounced[quizSession.current]) {
+    quizSession.feedbackAnnounced[quizSession.current] = true;
+    announceQuizFeedback(isCorrect);
+  }
+  if (state.settings.sound && !state.settings.feedbackMuted) playFeedback(isCorrect);
   render();
 }
 function announceQuizFeedback(correct) {
-  if (!state.settings.voiceFeedback || state.settings.feedbackMuted || !('speechSynthesis' in window) || !window.SpeechSynthesisUtterance) return;
+  if (!state.settings.voiceFeedback || state.settings.feedbackMuted || typeof window === 'undefined' || !('speechSynthesis' in window) || !window.SpeechSynthesisUtterance) return;
   if (!quizSession) return;
   const key = `${quizSession.startedAt}:${quizSession.current}:${correct}`;
-  if (quizSession.voiceAnnouncementKey === key || window.speechSynthesis.speaking) return;
+  if (quizSession.voiceAnnouncementKey === key) return;
   quizSession.voiceAnnouncementKey = key;
   try {
-    const utterance = new SpeechSynthesisUtterance(correct
-      ? "Correct! That's the right answer. Congratulations!"
-      : "Not quite! Let's learn from this one. Here's the correct answer.");
+    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+      window.speechSynthesis.cancel();
+    }
+    const phrase = correct
+      ? "Correct! Excellent work. Keep it up!"
+      : "Not quite right. Try again!";
+    const utterance = new SpeechSynthesisUtterance(phrase);
     utterance.lang = 'en-US';
-    utterance.rate = 0.96;
-    utterance.pitch = 1;
-    utterance.volume = 0.8;
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
     const voices = window.speechSynthesis.getVoices();
-    utterance.voice = voices.find(voice => /^en(-|_)/i.test(voice.lang) && /google|microsoft|samantha|alex|natural/i.test(voice.name))
+    utterance.voice = voices.find(voice => /^en(-|_)/i.test(voice.lang) && /google|microsoft|samantha|alex|natural|daniel|karen/i.test(voice.name))
       || voices.find(voice => /^en(-|_)/i.test(voice.lang)) || null;
     window.speechSynthesis.speak(utterance);
   } catch (error) {
@@ -2190,6 +2201,9 @@ function playFeedback(correct) {
 }
 function finishQuiz(force = false) {
   if (!activeQuiz || !quizSession || quizSession.finished) return;
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
   if (quizSession.kind === 'bank' && !force) {
     quizSession.confirming = true;
     render();
@@ -2502,6 +2516,9 @@ function authPage() {
 const pageLabels = { home: 'Home', 'explore-subjects': 'Explore Subjects', explore: 'Quizzes', search: 'Search', topic: 'Study topic', 'ai-chat': 'AI Tutor', analytics: 'My Progress', rewards: 'Achievements', certificates: 'Certificates', premium: 'Premium', settings: 'Settings', help: 'Help & Support', categories: 'Categories', 'quiz-builder': 'Quiz studio', plus: 'Atlas Plus', leaderboard: 'Leaderboard', profile: 'My profile', auth: 'Demo profile', quiz: 'Quiz session', verify: 'Certificate verification' };
 function navigate(page) {
   if (timerId && page !== 'quiz') window.clearInterval(timerId);
+  if (page !== 'quiz' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
   if (activePage === 'premium' && page !== 'premium') membershipReturnPage = null;
   if (page === 'settings' && activePage !== 'settings') educationSettingsDraft = null;
   activePage = page;
@@ -3373,6 +3390,15 @@ function bindPageInteractions() {
     if (quizSession.timerEnabled && quizSession.remaining === 0) quizSession.remaining = activeQuiz.duration * 60;
     render();
     if (quizSession.timerEnabled) startTimer();
+  });
+  document.getElementById('voice-toggle')?.addEventListener('change', event => {
+    state.settings.voiceFeedback = event.target.checked;
+    if (!event.target.checked && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    persist();
+    render();
+    showToast(`Voice feedback ${state.settings.voiceFeedback ? 'enabled' : 'disabled'}.`, 'success');
   });
   document.getElementById('quiz-difficulty')?.addEventListener('change', event => startQuiz(event.target.value));
   document.querySelector('[data-retry-quiz]')?.addEventListener('click', () => startQuiz(activeQuiz.id));

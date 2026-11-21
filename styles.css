@@ -25,14 +25,14 @@
   --shadow-card: 0 12px 28px rgba(2, 6, 23, 0.3);
   --glow-purple: 0 0 30px rgba(139, 92, 246, 0.25);
   --glow-blue: 0 0 30px rgba(6, 182, 212, 0.15);
-  --input-bg: rgba(11, 16, 33, 0.88);
-  --input-bg-hover: rgba(18, 24, 48, 0.96);
-  --input-border: rgba(139, 92, 246, 0.42);
-  --input-border-hover: rgba(167, 139, 250, 0.72);
-  --input-border-focus: #a78bfa;
-  --input-glow: 0 0 0 3px rgba(139, 92, 246, 0.16), 0 0 24px rgba(124, 58, 237, 0.16);
-  --input-text: #f8fafc;
-  --input-placeholder: #7f8ba8;
+  --input-bg: #c4b5fd;
+  --input-bg-hover: #ddd6fe;
+  --input-border: #7c3aed;
+  --input-border-hover: #6d28d9;
+  --input-border-focus: #5b21b6;
+  --input-glow: 0 0 0 3px rgba(124, 58, 237, 0.24), 0 0 24px rgba(124, 58, 237, 0.2);
+  --input-text: #000000;
+  --input-placeholder: rgba(0, 0, 0, 0.65);
   --input-danger: #fb7185;
   --input-success: #34d399;
   --font: 'Manrope', sans-serif;
@@ -51,25 +51,25 @@ html {
 }
 
 html:not(.theme-dark) {
-  --input-bg: #d8c7ff;
-  --input-bg-hover: #e4d8ff;
+  --input-bg: #c4b5fd;
+  --input-bg-hover: #ddd6fe;
   --input-border: #7c3aed;
   --input-border-hover: #6d28d9;
   --input-border-focus: #5b21b6;
-  --input-glow: 0 0 0 3px rgba(124, 58, 237, 0.18), 0 0 22px rgba(124, 58, 237, 0.18);
-  --input-text: #1f123d;
-  --input-placeholder: #554475;
+  --input-glow: 0 0 0 3px rgba(124, 58, 237, 0.24), 0 0 22px rgba(124, 58, 237, 0.2);
+  --input-text: #000000;
+  --input-placeholder: rgba(0, 0, 0, 0.65);
 }
 
 html.theme-dark {
-  --input-bg: #211443;
-  --input-bg-hover: #2c1b58;
-  --input-border: #a78bfa;
-  --input-border-hover: #c4b5fd;
-  --input-border-focus: #ddd6fe;
-  --input-glow: 0 0 0 3px rgba(167, 139, 250, 0.2), 0 0 24px rgba(124, 58, 237, 0.2);
-  --input-text: #f8fafc;
-  --input-placeholder: #c4b5fd;
+  --input-bg: #c4b5fd;
+  --input-bg-hover: #ddd6fe;
+  --input-border: #7c3aed;
+  --input-border-hover: #6d28d9;
+  --input-border-focus: #5b21b6;
+  --input-glow: 0 0 0 3px rgba(124, 58, 237, 0.28), 0 0 24px rgba(124, 58, 237, 0.24);
+  --input-text: #000000;
+  --input-placeholder: rgba(0, 0, 0, 0.65);
 }
 
 body {
@@ -1911,6 +1911,16 @@ h2 {
   --glow-blue: 0 8px 20px rgba(21, 150, 163, .12);
   --font: 'DM Sans', sans-serif;
   --font-ui: 'DM Sans', sans-serif;
+  --input-bg: #c4b5fd;
+  --input-bg-hover: #ddd6fe;
+  --input-border: #7c3aed;
+  --input-border-hover: #6d28d9;
+  --input-border-focus: #5b21b6;
+  --input-glow: 0 0 0 3px rgba(124, 58, 237, 0.24), 0 0 24px rgba(124, 58, 237, 0.2);
+  --input-text: #000000;
+  --input-placeholder: rgba(0, 0, 0, 0.65);
+  --input-danger: #fb7185;
+  --input-success: #34d399;
 }
 
 html,
@@ -3755,72 +3765,90 @@ input[type="checkbox"] { flex: 0 0 17px; width: 17px; height: 17px; min-width: 1
 }
 
 /* Keep the glow system ahead of legacy theme/form specificity. */
-:is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea) {
+:is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search, .ai-search-box, .ai-chat-input-area) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea),
+:is(.search-box, .education-search, .ai-search-box) {
   width: 100%;
   max-width: 100%;
   min-width: 0;
   min-height: 46px;
   padding: 11px 13px;
-  color: var(--input-text);
-  background: var(--input-bg);
-  border: 1px solid var(--input-border);
+  color: #000000 !important;
+  background: var(--input-bg) !important;
+  border: 1px solid var(--input-border) !important;
   border-radius: 14px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025), 0 4px 14px rgba(2, 6, 23, 0.16);
-  color-scheme: light;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 4px 14px rgba(124, 58, 237, 0.14);
+  color-scheme: light !important;
 }
 
-:is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea):hover:not(:disabled) {
-  background: var(--input-bg-hover);
-  border-color: var(--input-border-hover);
+:is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search, .ai-search-box) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea):hover:not(:disabled),
+:is(.search-box, .education-search, .ai-search-box):hover:not(:disabled) {
+  background: var(--input-bg-hover) !important;
+  border-color: var(--input-border-hover) !important;
 }
 
-html.theme-dark :is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea) {
-  color-scheme: dark;
+html.theme-dark :is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search, .ai-search-box) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea) {
+  color-scheme: light !important;
+  color: #000000 !important;
 }
 
-:is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search) :is(input, select, textarea)::placeholder {
-  color: var(--input-placeholder);
+:is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search, .ai-search-box) :is(input, select, textarea)::placeholder,
+:is(.search-box, .education-search, .ai-search-box) :is(input, textarea)::placeholder {
+  color: rgba(0, 0, 0, 0.65) !important;
   opacity: 1;
 }
 
-:is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search) select option {
-  color: var(--input-text);
-  background: var(--input-bg);
+:is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search, .ai-search-box) select option {
+  color: #000000;
+  background: #ede9fe;
 }
 
-:is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea):focus {
-  background: var(--input-bg-hover);
-  border-color: var(--input-border-focus);
-  box-shadow: var(--input-glow);
+:is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search, .ai-search-box) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea):focus,
+:is(.search-box, .education-search, .ai-search-box):focus-within {
+  background: var(--input-bg-hover) !important;
+  border-color: var(--input-border-focus) !important;
+  box-shadow: var(--input-glow) !important;
 }
 
-:is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea):disabled {
-  color: #71809c;
-  background: rgba(15, 23, 42, 0.58);
-  border-color: rgba(71, 85, 105, 0.62);
-  box-shadow: none;
+:is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search, .ai-search-box) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea):disabled {
+  color: rgba(0, 0, 0, 0.45) !important;
+  background: #e2d9fc !important;
+  border-color: rgba(124, 58, 237, 0.35) !important;
+  box-shadow: none !important;
   cursor: not-allowed;
-  opacity: 0.68;
+  opacity: 0.72;
 }
 
 :is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea):user-invalid,
 :is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar, .search-box, .education-search) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea)[aria-invalid="true"] {
-  border-color: var(--input-danger);
-  box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.13), 0 0 18px rgba(251, 113, 133, 0.1);
+  border-color: var(--input-danger) !important;
+  box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.2), 0 0 18px rgba(251, 113, 133, 0.15);
 }
 
-:is(.search-box, .education-search) :is(input, textarea) {
+:is(.search-box, .education-search, .ai-search-box) {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+:is(.search-box, .education-search, .ai-search-box) :is(input, textarea) {
   min-height: 44px;
   padding: 9px 0;
+  color: #000000 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  font-weight: 500;
+}
+
+:is(.search-box, .education-search, .ai-search-box) :is(input, textarea):focus {
   background: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
 }
 
-:is(.search-box, .education-search) :is(input, textarea):focus {
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
+:is(.search-box, .education-search, .ai-search-box) svg {
+  color: #000000 !important;
 }
 
 .ai-search-box > textarea {
@@ -3830,10 +3858,12 @@ html.theme-dark :is(.theme-dark .field, .field, .theme-dark, .form-card, .settin
 }
 
 @media (max-width: 560px) {
-  :is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea) {
+  :is(.theme-dark .field, .field, .theme-dark, .form-card, .setting-row, .quiz-settings, .filter-bar) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea),
+  :is(.search-box, .education-search, .ai-search-box) {
     min-height: 48px;
     padding-inline: 12px;
     border-radius: 13px;
+    font-size: 16px;
   }
 }
 

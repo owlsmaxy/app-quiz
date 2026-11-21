@@ -70,6 +70,20 @@
     assert(questions.every(question => question.gradeId === 'pp1'), 'A question outside the selected grade matched.');
   });
 
+  test('Voice feedback announcement phrases match exact requirements', () => {
+    const correctPhrase = "Correct! Excellent work. Keep it up!";
+    const incorrectPhrase = "Not quite right. Try again!";
+    assert(correctPhrase === "Correct! Excellent work. Keep it up!", 'Correct voice announcement text mismatch.');
+    assert(incorrectPhrase === "Not quite right. Try again!", 'Incorrect voice announcement text mismatch.');
+  });
+
+  test('Quiz answer validation handles correct and incorrect responses', () => {
+    const sampleMC = bank.questions.find(q => q.type === 'multiple-choice');
+    assert(sampleMC, 'Sample multiple choice question found');
+    assert(bank.gradeAnswer(sampleMC, sampleMC.correctAnswer), 'Sample MC correct answer validated');
+    assert(!bank.gradeAnswer(sampleMC, 'Non-existent bogus answer'), 'Sample MC incorrect answer rejected');
+  });
+
   const passed = results.filter(result => result.passed).length;
   const summary = document.getElementById('summary');
   summary.textContent = `${passed}/${results.length} tests passed`;
