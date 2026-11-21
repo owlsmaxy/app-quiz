@@ -2500,13 +2500,15 @@ function settingsPage() {
 
 function authPage() {
   const cloudAuth = window.AtlasCloud?.isConfigured?.();
-  return `${pageHeading('A FRESH PAGE, A FRESH START', cloudAuth ? 'Sign in to Atlas Learn' : 'Your learning profile', cloudAuth ? 'Use your Supabase account to save AI Tutor conversations across sessions.' : 'Save a display name for this browser and make the experience yours.')}
+  const showNameField = !cloudAuth || authMode === 'signup';
+  return `${pageHeading('A FRESH PAGE, A FRESH START', cloudAuth ? (authMode === 'signup' ? 'Create your account' : 'Sign in to Atlas Learn') : 'Your learning profile', cloudAuth ? 'Use your Supabase account to save AI Tutor conversations across sessions.' : 'Save a display name for this browser and make the experience yours.')}
     <section class="sign-in-panel"><div class="demo-warning" style="margin-bottom:18px"><strong>${cloudAuth ? 'Secure account mode.' : 'Demonstration mode only.'}</strong> ${cloudAuth ? 'Your password is handled by Supabase Auth and never stored by Atlas Learn.' : 'No secure authentication service is configured. Do not enter a password or sensitive information.'}</div>
-    <h2>${cloudAuth ? (authMode === 'signup' ? 'Create your Atlas Learn account' : 'Welcome back, learner') : (authMode === 'signup' ? 'Set up your demo profile' : 'Welcome back, learner')}</h2><p>${cloudAuth ? 'Sign in to use the persistent AI Tutor and conversation history.' : 'This creates a local display profile only. Your progress stays in this browser and is not synced or protected by an account.'}</p>
-    <form id="demo-profile-form"><div class="field"><label for="demo-name">Display name</label><input id="demo-name" name="name" maxlength="40" autocomplete="nickname" value="${state.profile.signedIn ? escapeHTML(state.profile.name) : ''}" required placeholder="What should we call you?"></div>
-    <div class="field"><label for="demo-email">Email ${cloudAuth ? '' : '(optional)'}</label><input id="demo-email" name="email" type="email" maxlength="120" autocomplete="email" value="${state.profile.signedIn ? escapeHTML(state.profile.email) : ''}" ${cloudAuth ? 'required' : ''} placeholder="you@example.com"></div>
-    ${cloudAuth ? '<div class="field"><label for="demo-password">Password</label><input id="demo-password" name="password" type="password" minlength="8" autocomplete="current-password" required placeholder="At least 8 characters"></div>' : ''}
-    <button type="submit" class="primary-button">${cloudAuth ? (authMode === 'signup' ? 'Create secure account' : 'Sign in securely') : (authMode === 'signup' ? 'Create local demo profile' : 'Continue in demo mode')} ${icons.arrow}</button></form>
+    <h2>${cloudAuth ? (authMode === 'signup' ? 'Create your Atlas Learn account' : 'Welcome back, learner') : (authMode === 'signup' ? 'Set up your demo profile' : 'Welcome back, learner')}</h2><p>${cloudAuth ? (authMode === 'signup' ? 'Register with a display name, email, and password to sync your learning journey.' : 'Sign in with your email and password to use the persistent AI Tutor and conversation history.') : 'This creates a local display profile only. Your progress stays in this browser and is not synced or protected by an account.'}</p>
+    <form id="demo-profile-form">
+      ${showNameField ? `<div class="field"><label for="demo-name">Display name</label><input id="demo-name" name="name" maxlength="40" autocomplete="nickname" value="${escapeHTML(state.profile.name && state.profile.name !== 'Guest learner' ? state.profile.name : '')}" required placeholder="What should we call you?"></div>` : ''}
+      <div class="field"><label for="demo-email">Email ${cloudAuth ? '' : '(optional)'}</label><input id="demo-email" name="email" type="email" maxlength="120" autocomplete="email" value="${escapeHTML(state.profile.email || '')}" ${cloudAuth ? 'required' : ''} placeholder="you@example.com"></div>
+      ${cloudAuth ? `<div class="field"><label for="demo-password">Password</label><input id="demo-password" name="password" type="password" minlength="8" autocomplete="${authMode === 'signup' ? 'new-password' : 'current-password'}" required placeholder="At least 8 characters"></div>` : ''}
+      <button type="submit" class="primary-button">${cloudAuth ? (authMode === 'signup' ? 'Create secure account' : 'Sign in securely') : (authMode === 'signup' ? 'Create local demo profile' : 'Continue in demo mode')} ${icons.arrow}</button></form>
     ${cloudAuth ? `<div class="auth-divider"><span>or</span></div><button type="button" class="secondary-button auth-provider-button" data-magic-link>Send me a magic link</button><button type="button" class="secondary-button auth-provider-button" data-google-signin>Continue with Google</button>` : ''}
     <div class="auth-switch">${authMode === 'signup' ? 'Already have an account?' : 'New to Atlas Learn?'} <button type="button" data-auth-switch>${authMode === 'signup' ? 'Sign in' : 'Create an account'}</button></div>
     <div class="auth-switch"><button type="button" data-forgot-password>Forgot password?</button> ${cloudAuth ? 'We will email a secure reset link.' : 'Password recovery requires a secure account provider.'}</div>
@@ -3429,20 +3431,91 @@ function bindPageInteractions() {
   document.getElementById('demo-profile-form')?.addEventListener('submit', async event => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const name = String(form.get('name')).trim();
-    const email = String(form.get('email')).trim();
+    const name = String(form.get('name') || '').trim();
+    const email = String(form.get('email') || '').trim();
     const password = String(form.get('password') || '');
-    if (name.length < 2) { showToast('Please enter a display name with at least 2 characters.', 'warning'); return; }
-    if (email && !event.currentTarget.elements.email.checkValidity()) { showToast('Please enter a valid email address.', 'warning'); return; }
-    if (window.AtlasCloud?.isConfigured?.()) {
-      const result = authMode === 'signup' ? await window.AtlasCloud.signUp(email, password, name) : await window.AtlasCloud.signIn(email, password);
-      if (result.error) { showToast(result.error.message || 'Secure authentication failed.', 'warning'); return; }
-      if (authMode === 'signup' && !result.data?.session) { showToast('Account created. Check your email to confirm it, then sign in.', 'success'); return; }
-      Object.assign(state.profile, { name: name.slice(0, 40), email: email.slice(0, 120), avatar: initials(name), signedIn: true });
-      persist(); navigate('home'); showToast(authMode === 'signup' ? 'Account created. Check your email if confirmation is enabled.' : 'You are signed in.', 'success'); return;
+    const isCloud = Boolean(window.AtlasCloud?.isConfigured?.());
+
+    if (!isCloud || authMode === 'signup') {
+      if (name.length < 2) {
+        showToast('Please enter a display name with at least 2 characters.', 'warning');
+        return;
+      }
     }
+    if (email && !event.currentTarget.elements.email?.checkValidity()) {
+      showToast('Please enter a valid email address.', 'warning');
+      return;
+    }
+    if (isCloud) {
+      if (!email) {
+        showToast('Please enter your email address.', 'warning');
+        return;
+      }
+      if (!password) {
+        showToast('Please enter your password.', 'warning');
+        return;
+      }
+      if (authMode === 'signup' && password.length < 8) {
+        showToast('Password must be at least 8 characters long.', 'warning');
+        return;
+      }
+      const submitBtn = event.currentTarget.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
+
+      try {
+        const result = authMode === 'signup'
+          ? await window.AtlasCloud.signUp(email, password, name)
+          : await window.AtlasCloud.signIn(email, password);
+
+        if (result.error) {
+          const errMsg = String(result.error.message || '');
+          const errCode = String(result.error.code || result.error.error_code || '');
+          if (errCode === 'email_not_confirmed' || /email not confirmed/i.test(errMsg)) {
+            showToast('Please confirm your email address. Check your inbox or spam folder for the confirmation link.', 'warning');
+          } else if (errCode === 'invalid_credentials' || /invalid login credentials/i.test(errMsg)) {
+            showToast('Invalid email or password. Please check your credentials and try again.', 'warning');
+          } else {
+            showToast(result.error.message || 'Secure authentication failed.', 'warning');
+          }
+          return;
+        }
+
+        if (authMode === 'signup' && !result.data?.session) {
+          showToast('Account created! Please check your email to confirm your account before signing in.', 'success');
+          authMode = 'signin';
+          render();
+          return;
+        }
+
+        const user = result.data?.user || result.data?.session?.user;
+        const resolvedName = (
+          user?.user_metadata?.display_name ||
+          user?.user_metadata?.full_name ||
+          user?.user_metadata?.name ||
+          (name ? name : '') ||
+          user?.email?.split('@')[0] ||
+          (state.profile.name && state.profile.name !== 'Guest learner' ? state.profile.name : '') ||
+          'Learner'
+        ).slice(0, 40);
+        const resolvedEmail = (user?.email || email || state.profile.email || '').slice(0, 120);
+
+        state.profile.name = resolvedName;
+        state.profile.email = resolvedEmail;
+        state.profile.avatar = initials(resolvedName);
+        state.profile.signedIn = true;
+        persist();
+        navigate('home');
+        showToast(authMode === 'signup' ? 'Account created. Welcome to Atlas Learn!' : 'You are signed in.', 'success');
+        return;
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    }
+
     Object.assign(state.profile, { name: name.slice(0, 40), email: email.slice(0, 120), avatar: initials(name), signedIn: true });
-    persist(); navigate('home'); showToast('Demo profile ready. No account or password was created.', 'success');
+    persist();
+    navigate('home');
+    showToast('Demo profile ready. No account or password was created.', 'success');
   });
   document.querySelector('[data-magic-link]')?.addEventListener('click', async () => {
     const email = document.getElementById('demo-email')?.value.trim();
@@ -3926,25 +3999,41 @@ if (state.stats.lastActiveDate && state.stats.lastActiveDate !== todayKey() && s
 render();
 if (location.hash) renderFromLocation();
 if (window.AtlasCloud?.isConfigured?.()) {
-  const cloudClient = window.AtlasCloud.getClient();
+  const syncUserSession = (user) => {
+    if (!user) return;
+    state.profile.signedIn = true;
+    if (user.email) state.profile.email = user.email.slice(0, 120);
+    const resolvedName = (
+      user.user_metadata?.display_name ||
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      (state.profile.name && state.profile.name !== 'Guest learner' ? state.profile.name : '') ||
+      user.email?.split('@')[0] ||
+      'Learner'
+    ).slice(0, 40);
+    state.profile.name = resolvedName;
+    state.profile.avatar = initials(resolvedName);
+    persist();
+  };
+
   window.AtlasCloud.authReady.then(({ data, error }) => {
     cloudSession = data?.session || null;
     cloudAuthReady = true;
     if (error) aiLastError = 'Your secure session could not be restored. Please sign in again.';
-    const user = cloudSession?.user;
-    if (user) {
-      state.profile.signedIn = true;
-      state.profile.email = user.email || '';
-      state.profile.name = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Learner';
-      state.profile.avatar = initials(state.profile.name);
-      persist();
+    if (cloudSession?.user) {
+      syncUserSession(cloudSession.user);
     }
     render();
   });
-  cloudAuthSubscription = window.AtlasCloud.onAuthStateChange((_event, session) => {
+  cloudAuthSubscription = window.AtlasCloud.onAuthStateChange((event, session) => {
     cloudSession = session || null;
     cloudAuthReady = true;
-    if (!session) { state.profile.signedIn = false; persist(); }
+    if (session?.user) {
+      syncUserSession(session.user);
+    } else if (event === 'SIGNED_OUT' || (!session && state.profile.signedIn)) {
+      state.profile.signedIn = false;
+      persist();
+    }
     render();
   });
 } else {

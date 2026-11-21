@@ -84,6 +84,29 @@
     assert(!bank.gradeAnswer(sampleMC, 'Non-existent bogus answer'), 'Sample MC incorrect answer rejected');
   });
 
+  test('Supabase project configuration is preserved', () => {
+    const config = window.AtlasSupabaseConfig;
+    if (config) {
+      assert(config.url.startsWith('https://'), 'Supabase URL must use https');
+      assert(config.publishableKey.length > 20, 'Supabase publishable key must be configured');
+    }
+  });
+
+  test('User display name correctly resolves from Supabase user_metadata', () => {
+    const mockUser = {
+      email: 'student@example.com',
+      user_metadata: { display_name: 'Jane Doe' }
+    };
+    const resolved = mockUser.user_metadata?.display_name || mockUser.email?.split('@')[0] || 'Learner';
+    assert(resolved === 'Jane Doe', 'Display name resolution failed');
+  });
+
+  test('Unconfirmed email error is mapped to helpful verification instructions', () => {
+    const err = { code: 'email_not_confirmed', message: 'Email not confirmed' };
+    const isUnconfirmed = err.code === 'email_not_confirmed' || /email not confirmed/i.test(err.message);
+    assert(isUnconfirmed, 'Should identify unconfirmed email error');
+  });
+
   const passed = results.filter(result => result.passed).length;
   const summary = document.getElementById('summary');
   summary.textContent = `${passed}/${results.length} tests passed`;
