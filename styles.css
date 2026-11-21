@@ -1,5 +1,5 @@
+/* Generated using AppDeploy UI skill */
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
-
 :root {
   color-scheme: dark;
   --bg: #020617;
@@ -3623,3 +3623,48 @@ input[type="checkbox"]:disabled {
 .ai-copy-button { float:right; margin:0 0 6px 10px; border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:.72rem; }
 .ai-copy-button:hover { color:var(--accent); }
 @media (max-width: 860px) { .ai-chat-shell { grid-template-columns:1fr; min-height:calc(100dvh - 90px); } .ai-history-panel { display:none; grid-row:auto; border-right:0; border-bottom:1px solid var(--line); max-height:55dvh; overflow:auto; } .ai-history-panel.open { display:block; } .ai-history-list { display:grid; } .ai-history-item { min-width:0; } .ai-chat-header { grid-column:1; } .ai-mobile-history { display:inline-flex; margin-right:8px; } .ai-chat-identity { gap:8px; } }
+
+/* ---------- Accessible scalable quiz system ---------- */
+.quiz-shell { width: min(100%, 980px); margin: 0 auto; }
+.question-card { padding: clamp(22px, 4vw, 42px); border: 1px solid var(--line); border-radius: 22px; background: var(--surface); box-shadow: var(--shadow-card); }
+.question-number { color: var(--purple-dark); font-size: .75rem; font-weight: 800; letter-spacing: .12em; }
+.question-card h2 { max-width: 760px; margin: 14px 0 24px; font-size: clamp(1.35rem, 2.5vw, 2rem); line-height: 1.35; }
+.question-instructions { margin: 12px 0 0; color: var(--muted); font-size: .95rem; }
+.answer-list { display: flex; flex-direction: column; gap: 12px; width: 100%; margin: 22px 0; }
+.answer-option { display: flex; align-items: flex-start; width: 100%; min-height: 58px; padding: 15px 17px; gap: 13px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-soft); color: var(--text); text-align: left; line-height: 1.45; cursor: pointer; }
+.answer-option > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.answer-option:hover:not(:disabled) { border-color: var(--purple); transform: translateY(-1px); }
+.answer-option.correct { border-color: #15966f; background: #edf9f4; color: #185d49; }
+.answer-option.incorrect { border-color: #c94b58; background: #fff0f1; color: #7e2630; }
+.answer-key { display: inline-grid; flex: 0 0 30px; width: 30px; height: 30px; place-items: center; border: 1px solid var(--line-soft); border-radius: 50%; color: var(--muted); font-size: .82rem; font-weight: 800; }
+.answer-option:disabled { cursor: default; opacity: 1; }
+.question-navigation { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 18px 0; }
+.question-navigation-label { margin-right: 5px; color: var(--muted); font-size: .78rem; font-weight: 700; }
+.question-navigation button { min-width: 34px; min-height: 34px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text-secondary); cursor: pointer; }
+.question-navigation button.current { border-color: var(--purple-dark); background: var(--purple-dark); color: #fff; }
+.question-navigation button.answered { box-shadow: inset 0 -3px 0 #15966f; }
+.question-navigation-gap { color: var(--muted); }
+
+/* Compact, aligned selection controls across builder and search surfaces. */
+input[type="checkbox"] { flex: 0 0 17px; width: 17px; height: 17px; min-width: 17px; min-height: 17px; margin: 0; accent-color: var(--purple-dark); }
+.quiz-feedback-toggle, .switch-label, .field-checkbox, .filter-checkbox { display: inline-flex; align-items: center; gap: 9px; width: fit-content; max-width: 100%; }
+.quiz-feedback-toggle span, .switch-label span, .field-checkbox span, .filter-checkbox span { min-width: 0; overflow-wrap: anywhere; }
+
+/* Borderless, responsive table-style rows shared by Progress and Premium. */
+.analytics-history-list, .analytics-subject-list, .analytics-topic-list, .comparison-table { overflow: hidden; border-radius: 16px; background: var(--surface-soft); }
+.analytics-history-row, .analytics-subject-row, .analytics-topic-row, .comparison-row { display: grid; align-items: center; gap: 16px; min-width: 0; padding: 15px 18px; border: 0; }
+.analytics-history-row:nth-child(even), .analytics-subject-row:nth-child(even), .analytics-topic-row:nth-child(even), .comparison-row:nth-child(even) { background: color-mix(in srgb, var(--surface-tint) 55%, transparent); }
+.analytics-subject-row { grid-template-columns: minmax(180px, 1.5fr) minmax(100px, .7fr) minmax(120px, 1fr); }
+.analytics-topic-row { grid-template-columns: minmax(180px, 1fr) auto; }
+.analytics-subject-row > div:first-child, .analytics-topic-row > div:first-child { display: grid; gap: 4px; min-width: 0; }
+.analytics-subject-row span, .analytics-topic-row span { color: var(--muted); font-size: .82rem; }
+.comparison-row { grid-template-columns: minmax(220px, 1.6fr) minmax(120px, .8fr) minmax(120px, .8fr); }
+.comparison-row:first-child { background: var(--purple-dark); color: #fff; font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; }
+.comparison-row span, .comparison-row strong { overflow-wrap: anywhere; }
+.plans-heading { margin-top: 26px; }
+@media (max-width: 700px) {
+  .question-card { border-radius: 16px; }
+  .analytics-subject-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .analytics-subject-row .dashboard-progress-track { grid-column: 1 / -1; }
+  .comparison-row { grid-template-columns: minmax(145px, 1.3fr) minmax(90px, .8fr) minmax(90px, .8fr); gap: 9px; padding: 13px 12px; font-size: .82rem; }
+}

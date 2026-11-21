@@ -119,8 +119,10 @@ const membershipConfig = {
   currency: 'USD',
   prices: { monthly: 4.99, yearly: 39.99 },
   freeMonthlyQuizLimit: 10,
-  freeQuizQuestionLimit: 5,
-  premiumQuizQuestionLimit: 20
+  // Question count is intentionally governed by the selected question pool,
+  // provider limits and the browser rather than a UI-only entitlement cap.
+  freeQuizQuestionLimit: null,
+  premiumQuizQuestionLimit: null
 };
 let storageReadFailed = false;
 let membershipMigrationNeeded = false;
@@ -1684,11 +1686,10 @@ function defaultBuilderSubject(subjects, gradeId) {
   return subjects.find(subject => subject.id === availableSubject?.subjectId) || subjects[0];
 }
 function builderQuestionLimit() {
-  return hasActivePremiumMembership() ? membershipConfig.premiumQuizQuestionLimit : membershipConfig.freeQuizQuestionLimit;
+  return null;
 }
 function builderConfigurationRequiresPremium(draft = quizBuilderDraft) {
   return Boolean(draft && (
-    Number(draft.questionCount) > membershipConfig.freeQuizQuestionLimit ||
     !['beginner', 'intermediate'].includes(draft.difficulty) ||
     draft.questionType !== 'multiple-choice' ||
     Number(draft.timeLimit) > 0 ||
@@ -1700,7 +1701,7 @@ function hasPremiumBuilderSettings(draft = quizBuilderDraft) {
 }
 function normalizeFreeBuilderDraft() {
   if (hasActivePremiumMembership()) return;
-  quizBuilderDraft.questionCount = Math.min(membershipConfig.freeQuizQuestionLimit, Math.max(1, Number(quizBuilderDraft.questionCount) || 1));
+  quizBuilderDraft.questionCount = Math.max(1, Number(quizBuilderDraft.questionCount) || 1);
   if (!['beginner', 'intermediate'].includes(quizBuilderDraft.difficulty)) quizBuilderDraft.difficulty = 'beginner';
   quizBuilderDraft.questionType = 'multiple-choice';
   quizBuilderDraft.timeLimit = 0;
@@ -1794,14 +1795,13 @@ function quizBuilderPage() {
   normalizeFreeBuilderDraft();
   const draft = quizBuilderDraft;
   const isPremium = hasActivePremiumMembership();
-  const questionLimit = builderQuestionLimit();
   const curricula = AtlasEducation.getCurricula(draft.levelId);
   const grades = AtlasEducation.getGrades(draft.levelId, draft.curriculumId);
   const subjects = getBuilderSubjects(draft.levelId, draft.curriculumId, draft.gradeId);
   const topics = getBuilderTopics(draft.subjectId, draft.levelId, draft.curriculumId, draft.gradeId);
   const pool = builderQuestionPool();
   const matchingCount = pool.length;
-  const count = Math.min(Number(draft.questionCount) || 1, questionLimit);
+  const count = Math.max(1, Number(draft.questionCount) || 1);
   const selectedDifficulty = adaptiveDifficulty(pool, draft);
   const eligiblePool = pool.filter(item => item.difficulty === selectedDifficulty);
   const requestedQuestions = draft.preview && quizBuilderPreviewQuestions.length
@@ -1809,9 +1809,12 @@ function quizBuilderPage() {
   const queryResults = builderSearchResults(quizBuilderSearch);
   const selectedSubject = subjects.find(item => item.id === draft.subjectId);
   const builderSelect = (key, label, options, value, disabled = false) => `<label class="field"><span>${label}</span><select data-builder-select="${key}" ${disabled ? 'disabled' : ''}>${options.map(option => `<option value="${escapeHTML(option.id)}" ${option.id === value ? 'selected' : ''}>${escapeHTML(option.name)}</option>`).join('')}</select></label>`;
+  const countAvailability = count > eligiblePool.length
+    ? `You requested ${count}, but only ${eligiblePool.length} question${eligiblePool.length === 1 ? '' : 's'} match this selection.`
+    : `${count} question${count === 1 ? '' : 's'} can be used from this selection.`;
   const availableLevelQuestions = !matchingCount
     ? 'No questions match this exact selection yet.'
-    : `${matchingCount} matching sample question${matchingCount === 1 ? '' : 's'} available${eligiblePool.length !== matchingCount ? ` · ${eligiblePool.length} at ${selectedDifficulty} difficulty` : ''}`;
+    : `${matchingCount} matching sample question${matchingCount === 1 ? '' : 's'} available${eligiblePool.length !== matchingCount ? ` · ${eligiblePool.length} at ${selectedDifficulty} difficulty` : ''} · ${countAvailability}`;
   return `${pageHeading('BUILD A FOCUSED SESSION', 'Quiz studio', 'Choose the exact learning context, preview matching sample questions, then practice or take an assessment.', '<button type="button" class="secondary-button" data-page="learn">Browse learning library</button>')}
     <div class="quiz-studio-layout">
       <section class="form-card quiz-builder-card"><h2>Quiz settings</h2><p>Only questions tagged for your selected country, curriculum, level, grade, subject and topic can be included.</p>
@@ -1824,14 +1827,14 @@ function quizBuilderPage() {
           ${builderSelect('topicId', 'Topic', [{ id: '', name: 'All topics' }, ...topics], draft.topicId, !topics.length)}
           ${builderSelect('difficulty', 'Difficulty', [{ id: 'beginner', name: 'Beginner' }, { id: 'intermediate', name: 'Intermediate' }, ...(isPremium ? [{ id: 'advanced', name: 'Advanced' }, { id: 'adaptive', name: 'Adaptive practice' }] : [])], draft.difficulty)}
           ${builderSelect('questionType', 'Question format', isPremium ? [{ id: 'all', name: 'All available formats' }, ...AtlasQuestionBank.questionTypes.map(id => ({ id, name: ({ 'multiple-choice': 'Multiple choice', 'true-false': 'True or False', 'multiple-answer': 'Multiple answer', 'short-answer': 'Short answer', numerical: 'Numerical' })[id] }))] : [{ id: 'multiple-choice', name: 'Multiple choice' }], draft.questionType)}
-          <label class="field"><span>Number of questions</span><input type="number" min="1" max="${questionLimit}" value="${count}" data-builder-number="questionCount"></label>
+          <label class="field"><span>Number of questions</span><input type="number" min="1" inputmode="numeric" value="${count}" data-builder-number="questionCount" aria-describedby="question-count-help"><small id="question-count-help">Enter any positive number. The available pool and provider limits determine what can be created.</small><button type="button" class="text-button builder-all-questions" data-use-all-questions ${eligiblePool.length ? '' : 'disabled'}>Use all available questions</button></label>
           <label class="field"><span>Time limit</span><select data-builder-select="timeLimit"><option value="0" ${draft.timeLimit === 0 ? 'selected' : ''}>No timer</option>${isPremium ? [5, 10, 15, 20, 30].map(minutes => `<option value="${minutes}" ${Number(draft.timeLimit) === minutes ? 'selected' : ''}>${minutes} minutes</option>`).join('') : ''}</select></label>
           ${builderSelect('mode', 'Session mode', isPremium ? [{ id: 'practice', name: 'Practice' }, { id: 'assessment', name: 'Assessment' }] : [{ id: 'practice', name: 'Practice' }], draft.mode)}
         </div>
-        ${!isPremium ? `<div class="membership-builder-lock"><div><strong>Free practice is ready</strong><span>Build up to ${membershipConfig.freeQuizQuestionLimit} multiple-choice questions. Premium adds more formats, difficulty levels, timed assessments and up to ${membershipConfig.premiumQuizQuestionLimit} questions.</span></div><button type="button" class="text-button" data-membership-feature="advancedQuizStudio">Explore Premium ${icons.arrow}</button></div>` : ''}
+        ${!isPremium ? `<div class="membership-builder-lock"><div><strong>Free practice is ready</strong><span>Choose any positive question count supported by the matching question pool. Premium adds more formats, difficulty levels and timed assessments.</span></div><button type="button" class="text-button" data-membership-feature="advancedQuizStudio">Explore Premium ${icons.arrow}</button></div>` : ''}
         ${draft.mode === 'practice' ? `<label class="quiz-feedback-toggle"><input type="checkbox" data-builder-feedback ${draft.immediateFeedback ? 'checked' : ''}> Show feedback after each practice answer</label>` : '<p class="form-footnote">Assessment feedback and explanations appear after you submit.</p>'}
         <div class="quiz-bank-availability ${eligiblePool.length ? '' : 'is-empty'}" role="status">${escapeHTML(availableLevelQuestions)}${draft.difficulty === 'adaptive' ? ` · Adaptive difficulty: ${escapeHTML(selectedDifficulty)}` : ''}</div>
-        <div class="form-actions"><button type="button" class="secondary-button" data-preview-generated>Preview quiz</button><button type="button" class="primary-button" data-start-generated ${eligiblePool.length && draft.preview ? '' : 'disabled'}>Start ${draft.mode === 'assessment' ? 'assessment' : 'practice'} ${icons.arrow}</button></div>
+        <div class="form-actions"><button type="button" class="secondary-button" data-preview-generated ${count > eligiblePool.length ? 'disabled' : ''}>Preview quiz</button><button type="button" class="primary-button" data-start-generated ${eligiblePool.length && draft.preview && count <= eligiblePool.length ? '' : 'disabled'}>Start ${draft.mode === 'assessment' ? 'assessment' : 'practice'} ${icons.arrow}</button></div>
         ${draft.preview ? `<section class="quiz-preview" aria-live="polite"><h3>Quiz preview</h3><p>${requestedQuestions.length} question${requestedQuestions.length === 1 ? '' : 's'} · ${escapeHTML(draft.mode)} · ${draft.timeLimit ? `${draft.timeLimit} minute timer` : 'untimed'} · ${draft.difficulty === 'adaptive' ? `adaptive (${escapeHTML(selectedDifficulty)})` : escapeHTML(draft.difficulty)}</p>${requestedQuestions.length ? `<ol>${requestedQuestions.map(item => `<li>${escapeHTML(item.prompt)} <small>${escapeHTML(item.type.replaceAll('-', ' '))} · ${escapeHTML(item.difficulty)}</small></li>`).join('')}</ol>` : '<p>No matching questions are available to preview. Try another subject, topic or difficulty.</p>'}</section>` : ''}
       </section>
       <aside class="quiz-search-panel"><h2>Discover learning content</h2><p>Search subjects, topics, concepts and available practice questions.</p><label class="search-box">${icons.search}<input type="search" id="builder-search" value="${escapeHTML(quizBuilderSearch)}" placeholder="e.g. fractions, cells, variables" aria-label="Search subjects, topics, concepts and questions"></label>
@@ -1894,7 +1897,11 @@ function startGeneratedQuiz() {
     showToast(`No ${difficulty} questions are available for this exact learning selection yet.`, 'warning');
     return;
   }
-  const count = Math.min(Math.max(1, Number(quizBuilderDraft.questionCount) || 1), 20, eligible.length);
+  const count = Math.max(1, Number(quizBuilderDraft.questionCount) || 1);
+  if (count > eligible.length) {
+    showToast(`You requested ${count} questions, but only ${eligible.length} are available for this selection.`, 'warning');
+    return;
+  }
   const chosen = quizBuilderPreviewQuestions.filter(question => eligible.some(item => item.id === question.id));
   if (!quizBuilderDraft.preview || chosen.length !== count) {
     showToast('Preview the current quiz selection before starting.', 'warning');
@@ -1997,13 +2004,29 @@ function bankQuizPage() {
   return `<div class="quiz-shell">
     <div class="quiz-topline"><button class="text-button" type="button" data-quiz-exit>← Exit quiz</button><span class="quiz-category-label">${escapeHTML(activeQuiz.title)} · ${quizSession.mode === 'assessment' ? 'Assessment' : 'Practice'}</span><span class="timer-pill ${quizSession.remaining <= 15 && quizSession.timerEnabled ? 'urgent' : ''}" id="quiz-timer">${icons.clock}<span>${quizSession.timerEnabled ? formatTimer(quizSession.remaining) : 'Untimed'}</span></span></div>
     <div class="quiz-progress-copy"><span>Question ${quizSession.current + 1} of ${quizSession.questions.length}</span><span>${answeredCount} answered · ${Math.round(progress)}% visited</span></div><div class="quiz-progress-track"><span style="width:${progress}%"></span></div>
-    <nav class="question-navigation" aria-label="Question review navigation">${quizSession.questions.map((_, index) => `<button type="button" class="${index === quizSession.current ? 'current' : ''} ${bankResponseComplete(quizSession.responses[index]) ? 'answered' : ''} ${quizSession.review[index] ? 'marked-review' : ''}" data-bank-goto="${index}" aria-label="Question ${index + 1}${bankResponseComplete(quizSession.responses[index]) ? ', answered' : ', unanswered'}${quizSession.review[index] ? ', marked for review' : ''}">${index + 1}${quizSession.review[index] ? ' ⚑' : ''}</button>`).join('')}</nav>
+    ${quizQuestionNavigation('bank')}
     <section class="question-card" aria-labelledby="question-title"><div class="question-number">QUESTION ${String(quizSession.current + 1).padStart(2, '0')} · ${escapeHTML(typeLabel.toUpperCase())} · ${escapeHTML(question.difficulty.toUpperCase())}</div><p class="question-instructions">${escapeHTML(question.instructions)}${question.type === 'multiple-answer' ? ' Select all that apply.' : ''}</p><h2 id="question-title">${escapeHTML(question.prompt)}</h2>
       ${answerControl}
       <div class="answer-explanation ${showFeedback ? `visible ${correct ? '' : 'wrong'}` : ''}" id="bank-answer-explanation">${showFeedback ? `${correct ? 'That’s right! ' : 'Not quite. '}${escapeHTML(question.explanation)}` : ''}</div>
       <div class="quiz-controls"><button type="button" class="secondary-button" data-bank-previous ${quizSession.current === 0 ? 'disabled' : ''}>Previous</button><button type="button" class="secondary-button" data-bank-review>${quizSession.review[quizSession.current] ? 'Remove review mark' : 'Mark for review'}</button>${quizSession.current < quizSession.questions.length - 1 ? `<button type="button" class="primary-button" data-bank-next>Next question ${icons.arrow}</button>` : `<button type="button" class="primary-button" data-bank-submit>Submit ${quizSession.mode === 'assessment' ? 'assessment' : 'practice'} ${icons.arrow}</button>`}</div>
       ${quizSession.confirming ? `<div class="quiz-submit-confirm" role="alert"><strong>Submit this session?</strong><span>${unansweredCount ? `${unansweredCount} question${unansweredCount === 1 ? ' is' : 's are'} unanswered and will be scored as unanswered.` : 'You can review your answers before final submission.'}</span><button type="button" class="primary-button" data-confirm-bank-submit>Confirm submission</button><button type="button" class="text-button" data-cancel-bank-submit>Continue quiz</button></div>` : ''}
     </section></div>`;
+}
+function quizQuestionNavigation(kind = 'bank') {
+  const total = quizSession?.questions?.length || 0;
+  const current = quizSession?.current || 0;
+  const indices = new Set([0, total - 1]);
+  for (let index = Math.max(0, current - 2); index <= Math.min(total - 1, current + 2); index += 1) indices.add(index);
+  const ordered = [...indices].filter(index => index >= 0).sort((left, right) => left - right);
+  let previous = -1;
+  const controls = ordered.map(index => {
+    const gap = index - previous > 1 ? '<span class="question-navigation-gap" aria-hidden="true">…</span>' : '';
+    previous = index;
+    const answered = kind === 'bank' ? bankResponseComplete(quizSession.responses[index]) : quizSession.answers[index]?.correct !== undefined;
+    const review = Boolean(quizSession.review[index]);
+    return `${gap}<button type="button" class="${index === current ? 'current' : ''} ${answered ? 'answered' : ''} ${review ? 'marked-review' : ''}" data-${kind === 'bank' ? 'bank-goto' : 'quiz-goto'}="${index}" aria-label="Question ${index + 1}${answered ? ', answered' : ', unanswered'}${review ? ', marked for review' : ''}">${index + 1}${review ? ' ⚑' : ''}</button>`;
+  }).join('');
+  return `<nav class="question-navigation" aria-label="Question review navigation"><span class="question-navigation-label">Questions</span>${controls}</nav>`;
 }
 function quizPage() {
   if (!activeQuiz || !quizSession) return explorePage();
@@ -2379,7 +2402,7 @@ function analyticsPage() {
     </section>
     ${isPremium ? `<section class="analytics-detail-grid">
       <article class="section-card"><div class="section-heading"><div><h2>Subject performance</h2><p>Scores from your recorded quizzes</p></div></div>
-        ${subjectRows.length ? `<div class="analytics-subject-list">${subjectRows.map(item => `<div class="analytics-subject-row"><div><strong>${escapeHTML(item.name)}</strong><span>${item.attempts} quiz${item.attempts === 1 ? '' : 'zes'} · ${item.correct}/${item.total} correct</span></div><strong>${item.score}%</strong><div class="dashboard-progress-track" role="progressbar" aria-label="${escapeHTML(item.name)} performance" aria-valuenow="${item.score}" aria-valuemin="0" aria-valuemax="100"><span style="width:${item.score}%"></span></div></div>`).join('')}</div>` : '<div class="analytics-empty compact"><span>No subject scores are available for this filter.</span></div>'}
+        ${subjectRows.length ? `<div class="analytics-subject-list" role="table" aria-label="Subject progress"><div class="analytics-subject-row" role="row"><strong role="columnheader">Subject</strong><strong role="columnheader">Accuracy</strong><strong role="columnheader">Progress</strong></div>${subjectRows.map(item => `<div class="analytics-subject-row" role="row"><div role="cell"><strong>${escapeHTML(item.name)}</strong><span>${item.attempts} quiz${item.attempts === 1 ? '' : 'zes'} · ${item.correct}/${item.total} correct</span></div><strong role="cell">${item.score}%</strong><div class="dashboard-progress-track" role="progressbar" aria-label="${escapeHTML(item.name)} performance" aria-valuenow="${item.score}" aria-valuemin="0" aria-valuemax="100"><span style="width:${item.score}%"></span></div></div>`).join('')}</div>` : '<div class="analytics-empty compact"><span>No subject scores are available for this filter.</span></div>'}
         ${bestSubject && subjectRows.filter(item => item.total >= 5).length > 1 ? `<div class="analytics-insights"><span>Strongest subject <strong>${escapeHTML(bestSubject.name)} · ${bestSubject.score}%</strong></span><span>Most to revisit <strong>${escapeHTML(focusSubject.name)} · ${focusSubject.score}%</strong></span></div>` : '<p class="analytics-footnote">Strongest and focus subjects appear after at least five recorded answers per subject.</p>'}
       </article>
       <article class="section-card"><div class="section-heading"><div><h2>Topic accuracy</h2><p>Correct answers from saved topic-level practice</p></div></div>
@@ -2529,7 +2552,7 @@ function premiumPage() {
   const premiumBenefits = [
     'Unlimited quiz starts',
     'Full available sample question bank and question formats',
-    `Sessions with up to ${membershipConfig.premiumQuizQuestionLimit} questions`,
+    'Scalable quiz sessions sized to the available question pool',
     'Advanced and adaptive difficulty, timed sessions and assessments',
     'Atlas Plus learning reports, challenges and achievement badges',
     'Printable certificate preview after earning a Perfect Score'
@@ -2538,7 +2561,7 @@ function premiumPage() {
     free: [
       'Browse the full learning catalog and free quizzes',
       `${membershipConfig.freeMonthlyQuizLimit} quiz starts each month`,
-      `Focused multiple-choice practice up to ${membershipConfig.freeQuizQuestionLimit} questions`,
+      'Focused multiple-choice practice with a learner-chosen question count',
       'Basic scores, quiz history and learning progress'
     ],
     monthly: premiumBenefits,
@@ -2548,7 +2571,7 @@ function premiumPage() {
     ['Learning catalog and free quizzes', 'Included', 'Included'],
     [`Quiz starts per month`, `${membershipConfig.freeMonthlyQuizLimit}`, 'Unlimited'],
     ['Question formats', 'Multiple choice', 'All available formats'],
-    ['Quiz studio session size', `Up to ${membershipConfig.freeQuizQuestionLimit}`, `Up to ${membershipConfig.premiumQuizQuestionLimit}`],
+    ['Quiz studio session size', 'Choose a positive count', 'Choose a positive count'],
     ['Advanced / adaptive difficulty', '—', 'Included'],
     ['Timed assessments', '—', 'Included'],
     ['Atlas Plus reports, challenges and badges', '—', 'Included'],
@@ -2570,9 +2593,9 @@ function premiumPage() {
     ${membershipReturnPage ? `<div class="membership-return-note"><span>You came here from <strong>${escapeHTML(pageLabels[membershipReturnPage] || 'your learning activity')}</strong>.</span><button type="button" class="text-button" data-return-activity>Return to your activity ${icons.arrow}</button></div>` : ''}
     <div class="membership-status premium-status ${membership.isExpired ? 'expired' : ''}"><span class="status-crown" aria-hidden="true">${membership.isExpired ? '!' : '♛'}</span><strong>Membership status: ${membershipLabel}</strong><span>${currentPlan ? `Started ${formatMembershipDate(membership.startedAt)} · Access expires ${formatMembershipDate(membership.expiresAt)} · DEMO MODE, no payment was made.` : membership.isExpired ? `Previous demo plan expired ${formatMembershipDate(membership.expiresAt)}. Free access remains available.` : `Free plan · ${freeQuizAttemptsUsed()} of ${membershipConfig.freeMonthlyQuizLimit} quiz starts used this month.`}</span></div>
     <div class="comparison-title">Free and Premium at a glance</div>
-    <section class="comparison-table" aria-label="Free and Premium feature comparison">
-      <div class="comparison-row"><strong>Available feature</strong><strong>Free</strong><strong>Premium</strong></div>
-      ${comparisonRows.map(([name, free, premium]) => `<div class="comparison-row"><span>${name}</span><span>${free}</span><span>${premium}</span></div>`).join('')}
+    <section class="comparison-table" role="table" aria-label="Free and Premium feature comparison">
+      <div class="comparison-row" role="row"><strong role="columnheader">Available feature</strong><strong role="columnheader">Free</strong><strong role="columnheader">Premium</strong></div>
+      ${comparisonRows.map(([name, free, premium]) => `<div class="comparison-row" role="row"><span role="cell">${name}</span><span role="cell">${free}</span><span role="cell">${premium}</span></div>`).join('')}
     </section>
     <div class="plans-heading" id="membership-plans"><div><h2>Choose your membership</h2><p>Affordable monthly or annual options. Cancel any time in this demo.</p></div><span class="billing-toggle-label">Secure checkout is not connected</span></div>
     <section class="membership-plans-grid" aria-label="Membership options">
@@ -2827,11 +2850,36 @@ function bindPageInteractions() {
     render();
   }));
   document.querySelector('[data-builder-number="questionCount"]')?.addEventListener('input', event => {
-    quizBuilderDraft.questionCount = Math.min(builderQuestionLimit(), Math.max(1, Number(event.target.value) || 1));
+    quizBuilderDraft.questionCount = Math.max(1, Number(event.target.value) || 1);
     quizBuilderDraft.preview = false;
     quizBuilderPreviewQuestions = [];
     document.querySelector('.quiz-preview')?.remove();
     document.querySelector('[data-start-generated]')?.setAttribute('disabled', '');
+    const pool = builderQuestionPool();
+    const difficulty = adaptiveDifficulty(pool, quizBuilderDraft);
+    const eligibleCount = pool.filter(item => item.difficulty === difficulty).length;
+    const previewButton = document.querySelector('[data-preview-generated]');
+    if (previewButton) previewButton.toggleAttribute('disabled', !eligibleCount || quizBuilderDraft.questionCount > eligibleCount);
+    const availability = document.querySelector('.quiz-bank-availability');
+    if (availability) {
+      const matchingCount = pool.length;
+      availability.textContent = !matchingCount
+        ? 'No questions match this exact selection yet.'
+        : `${matchingCount} matching sample question${matchingCount === 1 ? '' : 's'} available · ${quizBuilderDraft.questionCount > eligibleCount ? `You requested ${quizBuilderDraft.questionCount}, but only ${eligibleCount} question${eligibleCount === 1 ? '' : 's'} match this selection.` : `${quizBuilderDraft.questionCount} question${quizBuilderDraft.questionCount === 1 ? '' : 's'} can be used from this selection.`}`;
+    }
+  });
+  document.querySelector('[data-use-all-questions]')?.addEventListener('click', () => {
+    const pool = builderQuestionPool();
+    const difficulty = adaptiveDifficulty(pool, quizBuilderDraft);
+    const eligibleCount = pool.filter(item => item.difficulty === difficulty).length;
+    if (!eligibleCount) {
+      showToast('No questions are available for this selection yet.', 'warning');
+      return;
+    }
+    quizBuilderDraft.questionCount = eligibleCount;
+    quizBuilderDraft.preview = false;
+    quizBuilderPreviewQuestions = [];
+    render();
   });
   document.querySelector('[data-builder-feedback]')?.addEventListener('change', event => {
     quizBuilderDraft.immediateFeedback = event.target.checked;
@@ -2848,7 +2896,12 @@ function bindPageInteractions() {
       const swapIndex = Math.floor(Math.random() * (index + 1));
       [eligible[index], eligible[swapIndex]] = [eligible[swapIndex], eligible[index]];
     }
-    quizBuilderPreviewQuestions = eligible.slice(0, Math.min(Number(quizBuilderDraft.questionCount) || 1, 20));
+    const requestedCount = Math.max(1, Number(quizBuilderDraft.questionCount) || 1);
+    if (requestedCount > eligible.length) {
+      showToast(`You requested ${requestedCount} questions, but only ${eligible.length} are available for this selection.`, 'warning');
+      return;
+    }
+    quizBuilderPreviewQuestions = eligible.slice(0, requestedCount);
     quizBuilderDraft.preview = true;
     render();
   });
