@@ -28,7 +28,7 @@ The browser never receives an Anthropic key. AI requests go through `supabase/fu
 
 1. Create a Supabase project and enable Email/password Auth.
 2. Apply `supabase/migrations/20261119000100_atlas_learn_initial_schema.sql` and then `supabase/migrations/20261119000200_ai_tutor_conversations.sql` in the SQL editor or with the Supabase CLI.
-3. Set Edge Function secrets: `supabase secrets set ANTHROPIC_API_KEY=... ANTHROPIC_MODEL=claude-haiku-4-5-20251001 AI_FREE_DAILY_LIMIT=20 AI_PREMIUM_DAILY_LIMIT=200 APP_ORIGIN=https://your-domain.example`.
+3. Set Edge Function secrets: `supabase secrets set AI_PROVIDER=anthropic ANTHROPIC_API_KEY=... ANTHROPIC_MODEL=claude-haiku-4-5-20251001 AI_FREE_DAILY_LIMIT=20 AI_PREMIUM_DAILY_LIMIT=200 APP_ORIGIN=https://your-domain.example`.
 4. Deploy with `supabase functions deploy ai-tutor`.
 5. Add the public project URL and publishable key to `supabase-config.js`:
 

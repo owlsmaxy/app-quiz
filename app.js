@@ -348,6 +348,9 @@ let aiConversation = [];
 let aiConversationId = '';
 let aiCloudConversations = [];
 let aiCloudConversationsLoaded = false;
+let cloudSession = null;
+let cloudAuthReady = false;
+let cloudAuthSubscription = null;
 let aiCloudLoading = false;
 let aiRequestToken = 0;
 let aiLastQuestion = '';
@@ -2731,6 +2734,13 @@ function groupAIConversations(items) {
 function aiChatPage() {
   const aiConfigStatus = window.AtlasCloud?.getConfigStatus?.() || { configured: false, missing: ['project URL', 'publishable/anon key'] };
   const historyEmpty = aiConfigStatus.configured ? 'Sign in to save and reopen conversations.' : `Configure your ${aiConfigStatus.missing.join(' and ')} in supabase-config.js, then sign in.`;
+  const authNotice = !aiConfigStatus.configured
+    ? `<div class="ai-error" role="alert"><span aria-hidden="true">!</span>Atlas AI is unavailable until the Supabase project URL and publishable/anon key are configured in supabase-config.js.</div>`
+    : !cloudAuthReady
+      ? '<div class="ai-history-status" role="status">Checking your secure Atlas Learn session…</div>'
+      : !cloudSession
+        ? `<div class="ai-error" role="alert"><span aria-hidden="true">!</span>Please sign in before sending an Atlas AI question. <button type="button" class="text-button" data-page="auth">Open secure sign-in</button></div>`
+        : '';
   const visibleConversations = aiCloudConversations.filter((item) => !aiHistorySearch.trim() || `${item.title} ${item.subject || ''} ${item.level || ''}`.toLowerCase().includes(aiHistorySearch.trim().toLowerCase()));
   const groupedHistory = groupAIConversations(visibleConversations);
   return `<section class="ai-chat-shell" aria-label="Atlas AI conversation">
@@ -2757,6 +2767,7 @@ function aiChatPage() {
       </div>
       ${aiPending ? `<div class="ai-loading" role="status" aria-live="polite"><span>Atlas AI is thinking</span><i></i><i></i><i></i></div>` : ''}
       ${aiLastError ? `<div class="ai-error" role="alert"><span aria-hidden="true">!</span>${escapeHTML(aiLastError)}${aiLastQuestion ? '<button type="button" class="text-button" data-ai-retry>Retry</button>' : ''}</div>` : ''}
+      ${authNotice}
       <div class="ai-chat-footer"><small>Atlas AI can make mistakes. For critical academic work, check the explanation with a teacher, tutor or trusted textbook.</small></div>
     </section>`;
 }
@@ -3851,11 +3862,28 @@ render();
 if (location.hash) renderFromLocation();
 if (window.AtlasCloud?.isConfigured?.()) {
   const cloudClient = window.AtlasCloud.getClient();
-  cloudClient.auth.getSession().then(({ data }) => {
-    const user = data.session?.user;
-    if (user) { state.profile.signedIn = true; state.profile.email = user.email || ''; state.profile.name = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Learner'; state.profile.avatar = initials(state.profile.name); persist(); render(); }
+  window.AtlasCloud.authReady.then(({ data, error }) => {
+    cloudSession = data?.session || null;
+    cloudAuthReady = true;
+    if (error) aiLastError = 'Your secure session could not be restored. Please sign in again.';
+    const user = cloudSession?.user;
+    if (user) {
+      state.profile.signedIn = true;
+      state.profile.email = user.email || '';
+      state.profile.name = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Learner';
+      state.profile.avatar = initials(state.profile.name);
+      persist();
+    }
+    render();
   });
-  cloudClient.auth.onAuthStateChange((_event, session) => { if (!session) { state.profile.signedIn = false; persist(); } });
+  cloudAuthSubscription = window.AtlasCloud.onAuthStateChange((_event, session) => {
+    cloudSession = session || null;
+    cloudAuthReady = true;
+    if (!session) { state.profile.signedIn = false; persist(); }
+    render();
+  });
+} else {
+  cloudAuthReady = true;
 }
 let hasSavedState = false;
 try {

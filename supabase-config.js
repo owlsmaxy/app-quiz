@@ -1,8 +1,8 @@
 // Browser-safe Supabase configuration only.
 // Set these two values for the target project. Never put a service-role key or AI key here.
 (() => {
-  const projectUrl = '';
-  const projectPublishableKey = '';
+  const projectUrl = 'https://kyiktlcgqlgsyysvfrti.supabase.co';
+  const projectPublishableKey = 'sb_publishable_9RM1egbic3YDGCWmOcLMvQ_GzElLzvX';
   const raw = window.ATLAS_SUPABASE_CONFIG || { url: projectUrl, publishableKey: projectPublishableKey };
   const url = typeof raw.url === 'string' ? raw.url.trim() : '';
   const publishableKey = typeof raw.publishableKey === 'string' ? raw.publishableKey.trim() : '';

@@ -1,12 +1,15 @@
 (() => {
   const config = window.AtlasSupabaseConfig || { url: '', publishableKey: '', status: { configured: false, missing: ['project URL', 'publishable/anon key'] } };
-  const client = window.supabase?.createClient && config.status?.configured
+  const client = window.__ATLAS_SUPABASE_CLIENT || (window.supabase?.createClient && config.status?.configured
     ? window.supabase.createClient(config.url, config.publishableKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } })
-    : null;
+    : null);
+  if (client) window.__ATLAS_SUPABASE_CLIENT = client;
+  const authReady = client ? client.auth.getSession() : Promise.resolve({ data: { session: null }, error: null });
   const unavailable = () => ({ error: { message: `Supabase is not configured. Add your ${config.status?.missing?.join(' and ') || 'project URL and publishable key'} in supabase-config.js.` } });
   async function requireClient() { return client || unavailable(); }
   async function getSession() { const api = await requireClient(); return api.error ? api : api.auth.getSession(); }
   async function getUser() { const api = await requireClient(); return api.error ? api : api.auth.getUser(); }
+  function onAuthStateChange(callback) { return client ? client.auth.onAuthStateChange(callback) : { data: { subscription: { unsubscribe() {} } } }; }
   async function sendMessage(payload, onDelta, signal) {
     const api = await requireClient();
     if (api.error) return api;
@@ -48,6 +51,8 @@
       const events = buffer.split('\n\n'); buffer = events.pop() || '';
       events.forEach(consume);
     }
+    buffer += decoder.decode();
+    if (buffer.trim()) consume(buffer);
     if (streamError) return { error: { message: streamError }, conversation, partial: answer };
     return { data: { conversation, message: { role: 'assistant', content: answer } } };
   }
@@ -67,5 +72,5 @@
   async function signInWithGoogle(redirectTo) { if (client) return client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } }); return unavailable(); }
   async function resetPassword(email, redirectTo) { if (client) return client.auth.resetPasswordForEmail(email, { redirectTo }); return unavailable(); }
   async function signOut() { if (client) return client.auth.signOut(); return unavailable(); }
-  window.AtlasCloud = Object.freeze({ isConfigured: () => Boolean(client), getConfigStatus: () => config.status, getClient: () => client, getSession, getUser, sendMessage, listConversations, loadMessages, searchMessages, renameConversation, deleteConversation, signIn, signUp, sendMagicLink, signInWithGoogle, resetPassword, signOut });
+  window.AtlasCloud = Object.freeze({ isConfigured: () => Boolean(client), getConfigStatus: () => config.status, getClient: () => client, authReady, getSession, getUser, onAuthStateChange, sendMessage, listConversations, loadMessages, searchMessages, renameConversation, deleteConversation, signIn, signUp, sendMagicLink, signInWithGoogle, resetPassword, signOut });
 })();

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
+import { ProviderError, selectProvider } from './provider.ts';
 
 const origin = Deno.env.get('APP_ORIGIN') ?? '*';
 const headers = {
@@ -23,8 +24,14 @@ Deno.serve(async (request) => {
   if (!authorization?.startsWith('Bearer ')) return json({ error: 'Please sign in before using Atlas AI.' }, 401);
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY');
-  const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
-  if (!supabaseUrl || !anonKey || !anthropicKey) return json({ error: 'Atlas AI is not configured on the server. Ask the administrator to set the Supabase and Anthropic secrets.' }, 503);
+  if (!supabaseUrl || !anonKey) return json({ error: 'Atlas AI is not configured on the server. Ask the administrator to set the Supabase secrets.' }, 503);
+  let provider;
+  try {
+    provider = selectProvider(Deno.env.get('AI_PROVIDER') ?? 'anthropic');
+  } catch (error) {
+    if (error instanceof ProviderError && error.kind === 'configuration') return json({ error: 'Atlas AI is not configured on the server. Ask the administrator to check the AI provider settings.' }, 503);
+    return json({ error: 'Atlas AI is temporarily unavailable. Please retry.' }, 503);
+  }
 
   const supabase = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authorization } } });
   const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -71,21 +78,8 @@ Deno.serve(async (request) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45_000);
   try {
-    const upstream = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5-20251001', max_tokens: 1400, temperature: 0.2, stream: true, system: tutorPrompt(level, subject, topic, curriculum, language), messages: [...context, { role: 'user', content: question }] }),
-      signal: controller.signal,
-    });
-    if (!upstream.ok) {
-      if (upstream.status === 401 || upstream.status === 403) return json({ error: 'Atlas AI credentials are invalid. Ask the administrator to check ANTHROPIC_API_KEY.' }, 503);
-      if (upstream.status === 429) return json({ error: 'Atlas AI is busy right now. Please wait a moment and retry.' }, 429);
-      return json({ error: 'Anthropic could not complete that request. Please retry.' }, 502);
-    }
-    if (!upstream.body) return json({ error: 'Atlas AI returned no stream. Please retry.' }, 502);
-    const reader = upstream.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
+    const providerStream = await provider.stream({ model: Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5-20251001', maxTokens: 1400, temperature: 0.2, system: tutorPrompt(level, subject, topic, curriculum, language), messages: [...context, { role: 'user', content: question }] }, controller.signal);
+    const reader = providerStream.getReader();
     let answer = '';
     const stream = new ReadableStream({
       async start(controller) {
@@ -94,18 +88,7 @@ Deno.serve(async (request) => {
           while (true) {
             const chunk = await reader.read();
             if (chunk.done) break;
-            buffer += decoder.decode(chunk.value, { stream: true });
-            const events = buffer.split('\n\n'); buffer = events.pop() ?? '';
-            for (const event of events) {
-              const dataLine = event.split('\n').find((line) => line.startsWith('data: '));
-              if (!dataLine) continue;
-              let data: Record<string, unknown>;
-              try { data = JSON.parse(dataLine.slice(6)); } catch { continue; }
-              if (data.type === 'content_block_delta') {
-                const delta = (data.delta as Record<string, unknown>)?.text;
-                if (typeof delta === 'string' && delta) { answer += delta; controller.enqueue(new TextEncoder().encode(sse('delta', { text: delta }))); }
-              }
-            }
+            if (chunk.value.type === 'text') { answer += chunk.value.text; controller.enqueue(new TextEncoder().encode(sse('delta', { text: chunk.value.text }))); }
           }
           if (!answer.trim()) { controller.enqueue(new TextEncoder().encode(sse('error', { error: 'Atlas AI returned an empty answer. Please retry.' }))); clearTimeout(timeout); controller.close(); return; }
           const savedAnswer = await supabase.from('messages').insert({ conversation_id: activeConversation.id, user_id: user.id, role: 'assistant', content: answer });
@@ -121,6 +104,12 @@ Deno.serve(async (request) => {
     });
     return new Response(stream, { headers: { ...headers, 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', Connection: 'keep-alive' } });
   } catch (error) {
+    if (error instanceof ProviderError) {
+      if (error.kind === 'authentication') return json({ error: 'Atlas AI credentials are invalid. Ask the administrator to check the configured provider secret.' }, 503);
+      if (error.kind === 'rate_limit') return json({ error: 'Atlas AI is busy right now. Please wait a moment and retry.' }, 429);
+      if (error.kind === 'configuration') return json({ error: 'Atlas AI is not configured on the server. Ask the administrator to check the AI provider settings.' }, 503);
+      return json({ error: 'The AI provider could not complete that request. Please retry.' }, 502);
+    }
     return json({ error: error instanceof DOMException && error.name === 'AbortError' ? 'Atlas AI timed out. Please retry.' : 'Atlas AI is temporarily unavailable. Please retry.' }, 502);
   }
 });
