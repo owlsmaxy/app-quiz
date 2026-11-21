@@ -339,6 +339,8 @@ let activeTopicId = '';
 let activeSubtopicId = '';
 let activeLessonId = '';
 let subjectSearchQuery = '';
+let subjectCatalogueLevel = 'all';
+let subjectLibraryQuery = '';
 let topicSearchQuery = '';
 let universalSearchQuery = '';
 let aiChatOpen = false;
@@ -2456,7 +2458,7 @@ function authPage() {
     <div class="auth-switch"><button type="button" data-page="home">Continue as guest</button></div></section>`;
 }
 
-const pageLabels = { home: 'Home', 'explore-subjects': 'Explore Subjects', explore: 'Quizzes', 'ai-chat': 'AI Tutor', analytics: 'My Progress', rewards: 'Achievements', certificates: 'Certificates', premium: 'Premium', settings: 'Settings', help: 'Help & Support', categories: 'Categories', 'quiz-builder': 'Quiz studio', plus: 'Atlas Plus', leaderboard: 'Leaderboard', profile: 'My profile', auth: 'Demo profile', quiz: 'Quiz session', verify: 'Certificate verification' };
+const pageLabels = { home: 'Home', 'explore-subjects': 'Explore Subjects', explore: 'Quizzes', search: 'Search', topic: 'Study topic', 'ai-chat': 'AI Tutor', analytics: 'My Progress', rewards: 'Achievements', certificates: 'Certificates', premium: 'Premium', settings: 'Settings', help: 'Help & Support', categories: 'Categories', 'quiz-builder': 'Quiz studio', plus: 'Atlas Plus', leaderboard: 'Leaderboard', profile: 'My profile', auth: 'Demo profile', quiz: 'Quiz session', verify: 'Certificate verification' };
 function navigate(page) {
   if (timerId && page !== 'quiz') window.clearInterval(timerId);
   if (activePage === 'premium' && page !== 'premium') membershipReturnPage = null;
@@ -2629,27 +2631,51 @@ function subjectCard(subject, discipline) {
 }
 
 function exploreSubjectsPage() {
+  if (activeSubjectId) return subjectLibraryPage();
   const catalogue = SubjectCatalogue.allDisciplines();
   const query = subjectSearchQuery.trim().toLocaleLowerCase();
-  const filtered = catalogue.filter(discipline => {
-    const match = !query || `${discipline.name} ${discipline.description}`.toLocaleLowerCase().includes(query);
-    return match;
+  const filtered = catalogue.filter(discipline => subjectCatalogueLevel === 'all' || discipline.level === subjectCatalogueLevel).filter(discipline => {
+    if (!query) return true;
+    return `${discipline.name} ${discipline.description} ${(discipline.subjects || []).map(subject => `${subject.name} ${subject.description}`).join(' ')}`.toLocaleLowerCase().includes(query);
   });
   return `${pageHeading('DISCOVER EVERY SUBJECT', 'Explore subjects', 'Browse the global catalogue across every education level, from PP1 to postgraduate and independent study.', '<div class="heading-actions"><button type="button" class="secondary-button" data-page="search">Universal search</button></div>')}
     <label class="search-box">${icons.search}<input id="subject-search" type="search" value="${escapeHTML(subjectSearchQuery)}" placeholder="Search subjects and disciplines..." aria-label="Search subjects"></label>
-    <div class="filter-bar">${SubjectCatalogue.defaultLevelOrder.map(levelId => `<button class="filter-chip ${'all' === 'all' ? 'active' : ''}" data-level-filter="${escapeHTML(levelId)}">${SubjectCatalogue.levelIcon[levelId] || '✦'} ${SubjectCatalogue.levelLabels[levelId] || levelId}</button>`).join('')}</div>
+    <div class="filter-bar"><button class="filter-chip ${subjectCatalogueLevel === 'all' ? 'active' : ''}" data-level-filter="all">All levels</button>${SubjectCatalogue.defaultLevelOrder.map(levelId => `<button class="filter-chip ${subjectCatalogueLevel === levelId ? 'active' : ''}" data-level-filter="${escapeHTML(levelId)}">${SubjectCatalogue.levelIcon[levelId] || '✦'} ${SubjectCatalogue.levelLabels[levelId] || levelId}</button>`).join('')}</div>
     <div class="discipline-grid">${filtered.map(discipline => {
       const subjects = discipline.subjects || [];
-      const match = !query || `${discipline.name} ${discipline.description}`.toLocaleLowerCase().includes(query);
-      const visibleSubjects = query ? subjects.filter(s => `${s.name} ${s.description}`.toLocaleLowerCase().includes(query)) : subjects;
-      return `<section class="discipline-section"><div class="discipline-header"><h2>${escapeHTML(discipline.name)}</h2><p>${escapeHTML(discipline.description)}</p></div><div class="subject-grid">${visibleSubjects.map(subject => subjectCard(subject, discipline)).join('')}${visibleSubjects.length === 0 && match ? '<div class="empty-state compact"><p>No subjects match your search.</p></div>' : ''}</div></section>`;
+      const visibleSubjects = query ? subjects.filter(s => `${s.name} ${s.description} ${(s.specializations || []).map(sp => `${sp.name} ${sp.description}`).join(' ')}`.toLocaleLowerCase().includes(query)) : subjects;
+      return `<section class="discipline-section"><div class="discipline-header"><h2>${escapeHTML(discipline.name)}</h2><p>${escapeHTML(discipline.description)}</p></div><div class="subject-grid">${visibleSubjects.map(subject => subjectCard(subject, discipline)).join('')}${visibleSubjects.length === 0 ? '<div class="empty-state compact"><p>No subjects match your search.</p></div>' : ''}</div></section>`;
     }).join('')}</div>
     ${filtered.length === 0 ? '<div class="empty-state"><div class="empty-icon">🔎</div><h3>No disciplines found</h3><p>Try another search term.</p></div>' : ''}`;
+}
+
+function subjectLibraryPage() {
+  const subject = SubjectCatalogue.getSubject(activeSubjectId);
+  if (!subject) {
+    activeSubjectId = '';
+    return exploreSubjectsPage();
+  }
+  const references = AtlasLearningLibrary.referencesFor(subject);
+  const query = subjectLibraryQuery.trim().toLocaleLowerCase();
+  const groups = (subject.specializations || []).map(specialization => ({
+    ...specialization,
+    courses: (specialization.courses || []).map(course => ({
+      ...course,
+      topics: (course.subtopics || []).filter(topic => !query || `${topic.name} ${topic.description} ${(topic.lessons || []).map(lesson => `${lesson.title} ${lesson.content}`).join(' ')}`.toLocaleLowerCase().includes(query))
+    })).filter(course => course.topics.length)
+  })).filter(specialization => specialization.courses.length);
+  const bookmarked = SubjectCatalogue.isBookmarked(subject.id, 'subject');
+  return `${pageHeading('SUBJECT LIBRARY', subject.name, `${SubjectCatalogue.levelLabels[subject.level] || subject.level} · ${subject.description}`, '<button type="button" class="secondary-button" data-back-to-subjects>← All subjects</button>')}
+    <section class="library-subject-hero"><span class="library-subject-icon">${subject.icon || '✦'}</span><div><span class="eyebrow">STUDY MATERIALS</span><h2>${escapeHTML(subject.name)}</h2><p>Open a topic to read original Atlas Learn notes, review examples, consult references and practise what you learned.</p></div><button type="button" class="secondary-button" data-toggle-bookmark-subject>${bookmarked ? 'Unsave subject' : 'Save subject'} ${icons.book}</button></section>
+    <div class="library-subject-layout"><main><label class="search-box library-search">${icons.search}<input id="subject-library-search" type="search" value="${escapeHTML(subjectLibraryQuery)}" placeholder="Search topics and lessons..." aria-label="Search topics and lessons"></label>
+      ${groups.length ? groups.map(specialization => `<section class="library-group"><div class="library-group-heading"><div><span class="eyebrow">LEARNING AREA</span><h2>${escapeHTML(specialization.name)}</h2><p>${escapeHTML(specialization.description)}</p></div></div>${specialization.courses.map(course => `<article class="library-course"><div><h3>${escapeHTML(course.name)}</h3><p>${escapeHTML(course.description)}</p></div><div class="library-topic-grid">${course.topics.map(topic => `<button type="button" class="library-topic-card" data-open-topic="${escapeHTML(topic.id)}" data-subject-id="${escapeHTML(subject.id)}"><span class="library-topic-mark">✦</span><span><strong>${escapeHTML(topic.name)}</strong><small>${escapeHTML(topic.description)}</small><em>${topic.lessons?.length || 0} study note${topic.lessons?.length === 1 ? '' : 's'}${topic.practiceQuestions?.length ? ` · ${topic.practiceQuestions.length} practice question${topic.practiceQuestions.length === 1 ? '' : 's'}` : ''}</em></span><span aria-hidden="true">→</span></button>`).join('')}</div></article>`).join('')}</section>`).join('') : '<div class="empty-state"><div class="empty-icon">🔎</div><h3>No matching topics</h3><p>Try a different search term.</p></div>'}
+    </main><aside class="library-reference-rail"><div class="section-heading"><div><h2>References</h2><p>Verified source links for further study.</p></div></div>${references.map(reference => `<article class="library-reference-card"><span class="eyebrow">${escapeHTML(reference.publisher || 'SOURCE')}</span><strong>${escapeHTML(reference.title)}</strong><span>${escapeHTML(reference.author)}</span><small>${reference.year || 'Publication year not listed'}${reference.edition ? ` · ${escapeHTML(reference.edition)}` : ''}</small><a href="${escapeHTML(reference.url)}" target="_blank" rel="noopener noreferrer">Open source ↗</a></article>`).join('')}</aside></div>`;
 }
 
 function searchPage() {
   const query = universalSearchQuery.trim();
   const results = query ? SubjectCatalogue.searchCatalogue(query, { limit: 40 }) : { subjects: [], topics: [], lessons: [], suggestions: [] };
+  const referenceMatches = query && window.AtlasLearningLibrary ? SubjectCatalogue.allSubjects().flatMap(subject => AtlasLearningLibrary.referencesFor(subject).filter(reference => `${reference.title} ${reference.author} ${reference.publisher} ${reference.section}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(reference => ({ ...reference, subjectId: subject.id, subjectName: subject.name }))).filter((reference, index, all) => all.findIndex(item => item.id === reference.id) === index).slice(0, 20) : [];
   const history = SubjectCatalogue.getSearchHistory();
   const recent = SubjectCatalogue.getRecentSearches();
   return `${pageHeading('UNIVERSAL SEARCH', 'Search everything', 'Find any subject, topic, concept or learning material across the entire catalogue.', '')}
@@ -2658,7 +2684,8 @@ function searchPage() {
       ${results.subjects.length ? `<section class="search-section"><h3>Subjects</h3><div class="search-subject-list">${results.subjects.map(subject => `<article class="search-result-item" data-open-subject="${escapeHTML(subject.id)}"><strong>${escapeHTML(subject.name)}</strong><span>${escapeHTML(SubjectCatalogue.levelLabels[subject.level] || subject.level)} · ${escapeHTML(subject.description)}</span></article>`).join('')}</div></section>` : ''}
       ${results.topics.length ? `<section class="search-section"><h3>Topics</h3><div class="search-topic-list">${results.topics.map(topic => `<article class="search-result-item" data-open-topic="${escapeHTML(topic.id)}" data-subject-id="${escapeHTML(topic.subjectId || '')}"><strong>${escapeHTML(topic.name)}</strong><span>${escapeHTML(topic.subjectName)} · ${escapeHTML(topic.courseName)}</span></article>`).join('')}</div></section>` : ''}
       ${results.lessons.length ? `<section class="search-section"><h3>Lessons</h3><div class="search-lesson-list">${results.lessons.map(lesson => `<article class="search-result-item" data-open-lesson="${escapeHTML(lesson.id)}" data-subject-id="${escapeHTML(lesson.subjectId || '')}" data-topic-id="${escapeHTML(lesson.topicId || '')}"><strong>${escapeHTML(lesson.title)}</strong><span>${escapeHTML(lesson.topicName)} · ${escapeHTML(lesson.subjectName)}</span></article>`).join('')}</div></section>` : ''}
-      ${!results.subjects.length && !results.topics.length && !results.lessons.length ? `<div class="empty-state"><p>No verified content matches "<span>${escapeHTML(query)}</span>".</p><button class="primary-button" data-ai-discover="${escapeHTML(query)}">Ask Atlas AI to generate an outline ${icons.sparkles}</button></div>` : ''}
+      ${referenceMatches.length ? `<section class="search-section"><h3>References</h3><div class="search-reference-list">${referenceMatches.map(reference => `<article class="search-result-item"><strong>${escapeHTML(reference.title)}</strong><span>${escapeHTML(reference.author)} · ${escapeHTML(reference.subjectName)}</span><a href="${escapeHTML(reference.url)}" target="_blank" rel="noopener noreferrer">Open source ↗</a></article>`).join('')}</div></section>` : ''}
+      ${!results.subjects.length && !results.topics.length && !results.lessons.length && !referenceMatches.length ? `<div class="empty-state"><p>No verified content matches "<span>${escapeHTML(query)}</span>".</p><button class="primary-button" data-ai-discover="${escapeHTML(query)}">Ask Atlas AI to generate an outline ${icons.sparkles}</button></div>` : ''}
     </div>` : ''}
     ${history.length ? `<section class="search-history"><h3>Recent searches</h3><div class="search-history-list">${history.map(item => `<button class="history-chip" data-search-history="${escapeHTML(item)}">${escapeHTML(item)}</button>`).join('')}<button class="text-button" data-clear-history>Clear history</button></div></section>` : ''}
     ${recent.length ? `<section class="search-recent"><h3>Popular this session</h3><div class="search-recent-list">${recent.map(item => `<button class="history-chip" data-search-recent="${escapeHTML(item.query)}">${escapeHTML(item.query)}</button>`).join('')}</div></section>` : ''}
@@ -2669,17 +2696,27 @@ function topicPage() {
   const subject = SubjectCatalogue.getSubject(activeSubjectId);
   const topic = activeTopicId ? SubjectCatalogue.getTopic(activeTopicId) : null;
   if (!subject || !topic) return `<div class="empty-state"><h3>Topic unavailable</h3><p>Choose a subject and topic to continue.</p><button class="secondary-button" data-page="explore-subjects">Browse subjects ${icons.arrow}</button></div>`;
-  const subtopics = topic.subtopics || [];
+  const materials = AtlasLearningLibrary.studyMaterials(topic, subject);
+  const lessons = topic.lessons || [];
   const query = topicSearchQuery.trim().toLocaleLowerCase();
-  const visible = query ? subtopics.filter(st => `${st.name} ${st.description}`.toLocaleLowerCase().includes(query)) : subtopics;
+  const visibleLessons = query ? lessons.filter(lesson => `${lesson.title} ${lesson.content}`.toLocaleLowerCase().includes(query)) : lessons;
   const bookmarked = SubjectCatalogue.isBookmarked(topic.id, 'topic');
   const headingActions = `<div class="heading-actions"><button class="secondary-button" data-toggle-bookmark-topic>${bookmarked ? 'Unsave' : 'Save'} topic ${icons.book}</button><button class="secondary-button" data-ask-atlas-topic>Ask Atlas AI about this topic ${icons.chat}</button></div>`;
+  if (activeLessonId) {
+    const lesson = SubjectCatalogue.getLesson(activeLessonId);
+    if (lesson) return `${pageHeading('STUDY NOTE', lesson.title, `${escapeHTML(subject.name)} · ${escapeHTML(topic.name)}`, '<button type="button" class="secondary-button" data-back-to-topic>← Back to topic</button>')}
+      <article class="study-note-page"><div class="study-note-meta"><span class="eyebrow">ORIGINAL ATLAS LEARN NOTE</span><span>${topic.verified !== false ? 'Catalogue content' : 'Draft content'}</span></div><h2>${escapeHTML(lesson.title)}</h2><div class="study-note-body"><p>${escapeHTML(lesson.content)}</p></div><section class="study-note-next"><h3>Keep studying</h3><p>Return to the topic for its objectives, key terms, references and revision questions.</p><button type="button" class="primary-button" data-back-to-topic>Back to ${escapeHTML(topic.name)} ${icons.arrow}</button></section></article>`;
+  }
   return `${pageHeading('EXPLORE TOPIC', topic.name, `${escapeHTML(subject.name)} · ${escapeHTML(SubjectCatalogue.levelLabels[subject.level] || subject.level)}`, headingActions)}
-    <label class="search-box">${icons.search}<input id="topic-search" type="search" value="${escapeHTML(topicSearchQuery)}" placeholder="Search subtopics and lessons..." aria-label="Search subtopics"></label>
-    <div class="topic-description"><strong>About this topic.</strong> ${escapeHTML(topic.description)}</div>
-    <div class="topic-subtopics">${visible.length ? visible.map(subtopic => `<article class="subtopic-card" tabindex="0" role="button" data-open-subtopic="${escapeHTML(subtopic.id)}"><span class="subtopic-number">✦</span><div><strong>${escapeHTML(subtopic.name)}</strong><p>${escapeHTML(subtopic.description)}</p></div><span class="subtopic-lessons">${subtopic.lessons ? subtopic.lessons.length : 0} lesson${subtopic.lessons ? (subtopic.lessons.length === 1 ? '' : 's') : '0'}</span><span class="subtopic-arrow">→</span></article>`).join('') : '<div class="empty-state compact"><p>No subtopics match your search.</p></div>'}</div>
-    ${!query && topic.practiceQuestions && topic.practiceQuestions.length ? `<section class="topic-practice"><h3>Practice questions</h3><div class="practice-list">${topic.practiceQuestions.map(q => `<article class="practice-item"><strong>${escapeHTML(q.prompt)}</strong><span>${escapeHTML(q.answer)}</span><small>${escapeHTML(q.explanation)}</small></article>`).join('')}</div></section>` : ''}
-    <div class="topic-verified-badge">${topic.verified !== false ? '<span>✓ Verified catalogue content</span>' : '<span style="color:var(--orange)">⚠ AI-generated suggestion · Not academically verified</span>'}</div>`;
+    <label class="search-box">${icons.search}<input id="topic-search" type="search" value="${escapeHTML(topicSearchQuery)}" placeholder="Search study notes..." aria-label="Search study notes"></label>
+    <div class="topic-description"><strong>Topic introduction.</strong> ${escapeHTML(materials.introduction)}</div>
+    <div class="study-layout"><main>
+      <section class="study-section"><div class="section-heading"><div><h2>Learning objectives</h2><p>What to understand after studying this topic.</p></div></div><ul class="study-objectives">${materials.objectives.map(item => `<li>${escapeHTML(item)}</li>`).join('')}</ul></section>
+      <section class="study-section"><div class="section-heading"><div><h2>Study notes</h2><p>Read the notes in order, then try the practice questions.</p></div></div>${visibleLessons.length ? `<div class="study-note-list">${visibleLessons.map(lesson => `<button type="button" class="study-note-row" data-open-lesson="${escapeHTML(lesson.id)}" data-subject-id="${escapeHTML(subject.id)}" data-topic-id="${escapeHTML(topic.id)}"><span class="study-note-index">${lessons.indexOf(lesson) + 1}</span><span><strong>${escapeHTML(lesson.title)}</strong><small>${escapeHTML(lesson.content)}</small></span><span aria-hidden="true">→</span></button>`).join('')}</div>` : '<div class="empty-state compact"><p>No study notes match your search.</p></div>'}</section>
+      <section class="study-section"><div class="section-heading"><div><h2>Key terms</h2><p>Use these terms when revising or asking Atlas AI for help.</p></div></div><div class="definition-list">${materials.definitions.map(item => `<div><strong>${escapeHTML(item.term)}</strong><span>${escapeHTML(item.meaning)}</span></div>`).join('')}</div></section>
+      ${!query && materials.revisionQuestions.length ? `<section class="study-section"><div class="section-heading"><div><h2>Revision questions</h2><p>Check what you remember before taking a related quiz.</p></div><button type="button" class="secondary-button" data-practice-topic="${escapeHTML(topic.id)}">Practise this topic ${icons.arrow}</button></div><div class="practice-list">${materials.revisionQuestions.map(q => `<article class="practice-item"><strong>${escapeHTML(q.prompt)}</strong><span>Answer: ${escapeHTML(q.answer)}</span><small>${escapeHTML(q.explanation)}</small></article>`).join('')}</div></section>` : ''}
+    </main><aside class="study-reference-rail"><section class="study-section"><div class="section-heading"><div><h2>Further reading</h2><p>Open the source material to study beyond this note.</p></div></div>${materials.references.map(reference => `<article class="library-reference-card"><span class="eyebrow">${escapeHTML(reference.publisher || 'SOURCE')}</span><strong>${escapeHTML(reference.title)}</strong><span>${escapeHTML(reference.section)}</span><small>${escapeHTML(reference.rights)}</small><a href="${escapeHTML(reference.url)}" target="_blank" rel="noopener noreferrer">Open reference ↗</a></article>`).join('')}</section></aside></div>
+    <div class="topic-verified-badge">${topic.verified !== false ? '<span>✓ Original catalogue content · external references clearly attributed</span>' : '<span style="color:var(--orange)">⚠ AI-generated suggestion · Not academically verified</span>'}</div>`;
 }
 
 function groupAIConversations(items) {
@@ -3357,13 +3394,15 @@ function bindPageInteractions() {
   };
   bindSearchWithFocus('subject-search', value => { subjectSearchQuery = value; });
   bindSearchWithFocus('universal-search', value => { universalSearchQuery = value; });
+  bindSearchWithFocus('subject-library-search', value => { subjectLibraryQuery = value; });
 
   document.querySelectorAll('[data-open-subject]').forEach(button => button.addEventListener('click', () => {
     activeSubjectId = button.dataset.openSubject;
     activeTopicId = '';
     activeSubtopicId = '';
     activeLessonId = '';
-    navigate('explore-subjects');
+    activePage = 'explore-subjects';
+    render();
   }));
   document.querySelectorAll('[data-open-topic]').forEach(button => button.addEventListener('click', () => {
     activeSubjectId = button.dataset.subjectId || '';
@@ -3377,6 +3416,12 @@ function bindPageInteractions() {
     activeTopicId = button.dataset.topicId || '';
     activeLessonId = button.dataset.openLesson;
     navigate('topic');
+  }));
+  document.querySelectorAll('[data-back-to-subjects]').forEach(button => button.addEventListener('click', () => {
+    activeSubjectId = ''; activeTopicId = ''; activeSubtopicId = ''; activeLessonId = ''; subjectLibraryQuery = ''; navigate('explore-subjects');
+  }));
+  document.querySelectorAll('[data-back-to-topic]').forEach(button => button.addEventListener('click', () => {
+    activeLessonId = ''; topicSearchQuery = ''; render();
   }));
   document.querySelectorAll('[data-search-history]').forEach(button => button.addEventListener('click', () => {
     universalSearchQuery = button.dataset.searchHistory;
@@ -3396,15 +3441,20 @@ function bindPageInteractions() {
     const topic = SubjectCatalogue.getTopic(activeTopicId);
     if (topic) { SubjectCatalogue.toggleBookmark(topic.id, 'topic', topic.name); render(); }
   });
+  document.querySelector('[data-toggle-bookmark-subject]')?.addEventListener('click', () => {
+    const subject = SubjectCatalogue.getSubject(activeSubjectId);
+    if (subject) { SubjectCatalogue.toggleBookmark(subject.id, 'subject', subject.name); render(); }
+  });
   document.querySelector('[data-ask-atlas-topic]')?.addEventListener('click', () => {
     const topic = SubjectCatalogue.getTopic(activeTopicId);
     const subject = SubjectCatalogue.getSubject(activeSubjectId);
     if (topic && subject) askAtlasAI(`Explain the topic "${topic.name}" in ${subject.name}`, aiLevel);
   });
-  document.querySelector('[data-open-subtopic]')?.addEventListener('click', () => {
+  document.querySelectorAll('[data-open-subtopic]').forEach(button => button.addEventListener('click', () => {
     activeSubtopicId = button.dataset.openSubtopic;
+    activeLessonId = activeSubtopicId;
     render();
-  });
+  }));
   document.querySelector('[data-ai-level]')?.addEventListener('click', () => {
     const levels = Object.keys(AtlasAI.explanationLevels);
     const current = levels.indexOf(aiLevel);
@@ -3463,7 +3513,10 @@ function bindPageInteractions() {
     askAtlasAI(`I don't understand this quiz question: "${question.prompt}". Context: ${activeQuiz?.title || 'a quiz'}. Please explain what it's asking and how to approach it.`, aiLevel);
   });
 
-  document.querySelectorAll('[data-level-filter]').forEach(button => button.addEventListener('click', () => { /* level filter kept simple; all subjects shown */ }));
+  document.querySelectorAll('[data-level-filter]').forEach(button => button.addEventListener('click', () => {
+    subjectCatalogueLevel = button.dataset.levelFilter || 'all';
+    render();
+  }));
 }
 
 function buttonDatasetAiDiscover() {
