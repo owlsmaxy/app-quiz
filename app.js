@@ -135,7 +135,7 @@ const defaultState = {
       facultyId: '', programmeId: '', academicYearId: '', semesterId: '', subjectId: '', topicId: ''
     }
   },
-  settings: { theme: 'light', font: 'DM Sans', fontSize: 15, notifications: false, sound: false, reducedMotion: false },
+  settings: { theme: 'light', font: 'DM Sans', fontSize: 15, notifications: false, sound: false, voiceFeedback: false, feedbackMuted: false, reducedMotion: false },
   stats: { xp: 0, points: 0, quizzes: 0, correct: 0, streak: 0, lastActiveDate: '', activeDates: [], completedChallenges: [] },
   history: [],
   certificates: [],
@@ -233,6 +233,8 @@ function loadState() {
     restored.settings.fontSize = Math.min(18, Math.max(14, numberOrDefault(restored.settings.fontSize, defaultState.settings.fontSize)));
     restored.settings.notifications = Boolean(restored.settings.notifications);
     restored.settings.sound = Boolean(restored.settings.sound);
+    restored.settings.voiceFeedback = Boolean(restored.settings.voiceFeedback);
+    restored.settings.feedbackMuted = Boolean(restored.settings.feedbackMuted);
     restored.settings.reducedMotion = Boolean(restored.settings.reducedMotion);
     for (const key of ['xp', 'points', 'quizzes', 'correct', 'streak']) restored.stats[key] = numberOrDefault(restored.stats[key]);
     restored.stats.lastActiveDate = typeof restored.stats.lastActiveDate === 'string' ? restored.stats.lastActiveDate : '';
@@ -1933,7 +1935,7 @@ function startGeneratedQuiz() {
   };
   quizSession = {
     kind: 'bank', questions: chosen, current: 0, selected: null, answers: [],
-    responses: [], review: [], remaining: activeQuiz.duration * 60, finished: false,
+    responses: [], review: [], feedbackAnnounced: [], remaining: activeQuiz.duration * 60, finished: false,
     timerEnabled: activeQuiz.duration > 0, immediateFeedback: quizBuilderDraft.mode === 'practice' && quizBuilderDraft.immediateFeedback,
     mode: quizBuilderDraft.mode, confirming: false, savedAttemptId: '', startedAt: Date.now()
   };
@@ -1954,7 +1956,7 @@ function startQuiz(quizId) {
     const swapIndex = Math.floor(Math.random() * (index + 1));
     [questions[index], questions[swapIndex]] = [questions[swapIndex], questions[index]];
   }
-  quizSession = { questions, current: 0, selected: null, answers: [], remaining: 0, finished: false, timerEnabled: true, startedAt: Date.now() };
+  quizSession = { questions, current: 0, selected: null, answers: [], feedbackAnnounced: [], remaining: 0, finished: false, timerEnabled: true, startedAt: Date.now() };
   navigate('quiz');
 }
 function bankAnswerText(question, answer) {
@@ -1978,8 +1980,10 @@ function updateBankResponse(response) {
     response,
     correct: AtlasQuestionBank.gradeAnswer(question, response)
   };
-  if (quizSession.immediateFeedback && bankResponseComplete(response) && state.settings.sound) {
-    playFeedback(quizSession.answers[index].correct);
+  if (quizSession.immediateFeedback && bankResponseComplete(response) && !quizSession.feedbackAnnounced[index]) {
+    quizSession.feedbackAnnounced[index] = true;
+    announceQuizFeedback(quizSession.answers[index].correct);
+    if (state.settings.sound && !state.settings.feedbackMuted) playFeedback(quizSession.answers[index].correct);
   }
 }
 function bankQuizPage() {
@@ -2011,7 +2015,8 @@ function bankQuizPage() {
     <div class="quiz-progress-copy"><span>Question ${quizSession.current + 1} of ${quizSession.questions.length}</span><span>${answeredCount} answered · ${Math.round(progress)}% visited</span></div><div class="quiz-progress-track"><span style="width:${progress}%"></span></div>
     ${quizQuestionNavigation('bank')}
     <section class="question-card" aria-labelledby="question-title"><div class="question-number">QUESTION ${String(quizSession.current + 1).padStart(2, '0')} · ${escapeHTML(typeLabel.toUpperCase())} · ${escapeHTML(question.difficulty.toUpperCase())}</div><p class="question-instructions">${escapeHTML(question.instructions)}${question.type === 'multiple-answer' ? ' Select all that apply.' : ''}</p><h2 id="question-title">${escapeHTML(question.prompt)}</h2>
-      ${answerControl}
+       ${answerControl}
+       ${quizMascotMarkup({ answered: showFeedback, correct, explanation: question.explanation })}
       <div class="answer-explanation ${showFeedback ? `visible ${correct ? '' : 'wrong'}` : ''}" id="bank-answer-explanation">${showFeedback ? `${correct ? 'That’s right! ' : 'Not quite. '}${escapeHTML(question.explanation)}` : ''}</div>
       <div class="quiz-controls"><button type="button" class="secondary-button" data-bank-previous ${quizSession.current === 0 ? 'disabled' : ''}>Previous</button><button type="button" class="secondary-button" data-bank-review>${quizSession.review[quizSession.current] ? 'Remove review mark' : 'Mark for review'}</button>${quizSession.current < quizSession.questions.length - 1 ? `<button type="button" class="primary-button" data-bank-next>Next question ${icons.arrow}</button>` : `<button type="button" class="primary-button" data-bank-submit>Submit ${quizSession.mode === 'assessment' ? 'assessment' : 'practice'} ${icons.arrow}</button>`}</div>
       ${quizSession.confirming ? `<div class="quiz-submit-confirm" role="alert"><strong>Submit this session?</strong><span>${unansweredCount ? `${unansweredCount} question${unansweredCount === 1 ? ' is' : 's are'} unanswered and will be scored as unanswered.` : 'You can review your answers before final submission.'}</span><button type="button" class="primary-button" data-confirm-bank-submit>Confirm submission</button><button type="button" class="text-button" data-cancel-bank-submit>Continue quiz</button></div>` : ''}
@@ -2052,8 +2057,9 @@ function quizPage() {
         if (answered && correct) klass = 'correct';
         else if (answered && selected) klass = 'incorrect';
         return `<button type="button" class="answer-option ${klass}" data-answer="${index}" role="radio" aria-checked="${selected}" aria-pressed="${selected}" ${answered ? 'disabled' : ''}><span class="answer-key" aria-hidden="true">${String.fromCharCode(65 + index)}</span><span>${escapeHTML(option)}</span></button>`;
-      }).join('')}</div>
-      <div class="answer-explanation ${quizSession.selected !== null ? `visible ${quizSession.selected === question.answer ? '' : 'wrong'}` : ''}" id="answer-explanation">${quizSession.selected === question.answer ? 'That’s right! ' : 'Not quite. '} ${escapeHTML(question.explanation)}</div>
+       }).join('')}</div>
+       ${quizMascotMarkup({ answered: quizSession.selected !== null, correct: quizSession.selected === question.answer, explanation: question.explanation })}
+       <div class="answer-explanation ${quizSession.selected !== null ? `visible ${quizSession.selected === question.answer ? '' : 'wrong'}` : ''}" id="answer-explanation">${quizSession.selected === question.answer ? 'That’s right! ' : 'Not quite. '} ${escapeHTML(question.explanation)}</div>
       <div class="quiz-controls"><button type="button" class="secondary-button" data-quiz-back ${quizSession.current === 0 ? 'disabled' : ''}>Previous</button><button type="button" class="secondary-button" data-ask-atlas-quiz>Ask Atlas AI ${icons.chat}</button><button type="button" class="primary-button" data-quiz-next ${quizSession.selected === null ? 'disabled' : ''}>${quizSession.current === quizSession.questions.length - 1 ? 'See results' : 'Next question'} ${icons.arrow}</button></div>
     </section></div>`;
 }
@@ -2133,8 +2139,38 @@ function answerQuestion(index) {
   quizSession.selected = index;
   const question = quizSession.questions[quizSession.current];
   quizSession.answers[quizSession.current] = { ...question, selected: index, correct: index === question.answer };
-  if (state.settings.sound) playFeedback(index === question.answer);
+  announceQuizFeedback(index === question.answer);
+  if (state.settings.sound && !state.settings.feedbackMuted) playFeedback(index === question.answer);
   render();
+}
+function announceQuizFeedback(correct) {
+  if (!state.settings.voiceFeedback || state.settings.feedbackMuted || !('speechSynthesis' in window) || !window.SpeechSynthesisUtterance) return;
+  if (!quizSession) return;
+  const key = `${quizSession.startedAt}:${quizSession.current}:${correct}`;
+  if (quizSession.voiceAnnouncementKey === key || window.speechSynthesis.speaking) return;
+  quizSession.voiceAnnouncementKey = key;
+  try {
+    const utterance = new SpeechSynthesisUtterance(correct
+      ? "Correct! That's the right answer. Congratulations!"
+      : "Not quite! Let's learn from this one. Here's the correct answer.");
+    utterance.lang = 'en-US';
+    utterance.rate = 0.96;
+    utterance.pitch = 1;
+    utterance.volume = 0.8;
+    const voices = window.speechSynthesis.getVoices();
+    utterance.voice = voices.find(voice => /^en(-|_)/i.test(voice.lang) && /google|microsoft|samantha|alex|natural/i.test(voice.name))
+      || voices.find(voice => /^en(-|_)/i.test(voice.lang)) || null;
+    window.speechSynthesis.speak(utterance);
+  } catch (error) {
+    console.warn('Spoken quiz feedback is unavailable in this browser.', error);
+  }
+}
+function quizMascotMarkup({ answered, correct, explanation = '' }) {
+  const mood = answered ? (correct ? 'correct' : 'thinking') : 'idle';
+  const message = answered ? (correct ? 'Excellent work!' : "Let's learn this together!") : 'Ready when you are.';
+  const detail = answered && !correct ? String(explanation).slice(0, 150) : answered ? 'You spotted the key idea.' : 'Take your time and choose the answer that fits best.';
+  const mouth = correct && answered ? 'M29 43c4 5 10 5 14 0' : answered ? 'M30 46c4-2 8-2 12 0' : 'M30 44c4 2 8 2 12 0';
+  return `<aside class="quiz-mascot ${mood}" role="status" aria-live="polite"><div class="mascot-avatar" aria-hidden="true"><svg viewBox="0 0 72 72"><path class="mascot-body" d="M18 47c0-14 7-25 18-25s18 11 18 25v9H18z"/><path class="mascot-antenna" d="M36 22V12m0 0-5 4m5-4 5 4"/><circle class="mascot-eye left" cx="29" cy="36" r="2.5"/><circle class="mascot-eye right" cx="43" cy="36" r="2.5"/><path class="mascot-mouth" d="${mouth}"/><path class="mascot-cheek" d="M23 42h3m20 0h3"/></svg></div><div class="mascot-copy"><strong>${message}</strong><span>${escapeHTML(detail)}</span></div></aside>`;
 }
 function playFeedback(correct) {
   try {
@@ -2439,7 +2475,9 @@ function settingsPage() {
       </section>
       <section class="settings-card"><div class="settings-card-head"><span class="settings-card-icon">${icons.settings}</span><div><h3>Learning preferences</h3><p>Adjust helpful cues and motion in the interface.</p></div></div>
         <div class="setting-row"><div><strong>Learning reminders</strong><p>Browser-only preference. No notifications are sent in demo mode.</p></div><button class="switch" type="button" role="switch" aria-checked="${state.settings.notifications}" aria-label="Learning reminders" data-setting-toggle="notifications"></button></div>
-        <div class="setting-row"><div><strong>Answer sound</strong><p>Play a subtle tone after you answer a question.</p></div><button class="switch" type="button" role="switch" aria-checked="${state.settings.sound}" aria-label="Answer sound" data-setting-toggle="sound"></button></div>
+         <div class="setting-row"><div><strong>Answer sound</strong><p>Play a subtle tone after you answer a question.</p></div><button class="switch" type="button" role="switch" aria-checked="${state.settings.sound}" aria-label="Answer sound" data-setting-toggle="sound"></button></div>
+         <div class="setting-row"><div><strong>Spoken quiz feedback</strong><p>Use browser text-to-speech for short, encouraging answer feedback.</p></div><button class="switch" type="button" role="switch" aria-checked="${state.settings.voiceFeedback}" aria-label="Spoken quiz feedback" data-setting-toggle="voiceFeedback"></button></div>
+         <div class="setting-row"><div><strong>Mute quiz feedback</strong><p>Silence both answer tones and spoken feedback.</p></div><button class="switch" type="button" role="switch" aria-checked="${state.settings.feedbackMuted}" aria-label="Mute quiz feedback" data-setting-toggle="feedbackMuted"></button></div>
         <div class="setting-row"><div><strong>Reduce motion</strong><p>Limit transitions and animation.</p></div><button class="switch" type="button" role="switch" aria-checked="${state.settings.reducedMotion}" aria-label="Reduce motion" data-setting-toggle="reducedMotion"></button></div>
       </section>
       <div class="demo-warning">Demo mode: settings and quiz activity are stored in this browser’s local storage. This is not a secure user account or cloud backup. Never enter a password or payment information.</div>
@@ -3240,7 +3278,8 @@ function bindPageInteractions() {
     state.settings[key] = !state.settings[key];
     persist();
     render();
-    showToast(`${key === 'sound' ? 'Answer sound' : key === 'notifications' ? 'Learning reminders preference' : 'Reduced motion'} ${state.settings[key] ? 'enabled' : 'disabled'}.`, 'success');
+    const settingLabel = key === 'sound' ? 'Answer sound' : key === 'voiceFeedback' ? 'Spoken quiz feedback' : key === 'feedbackMuted' ? 'Quiz feedback mute' : key === 'notifications' ? 'Learning reminders preference' : 'Reduced motion';
+    showToast(`${settingLabel} ${state.settings[key] ? 'enabled' : 'disabled'}.`, 'success');
   }));
   document.querySelectorAll('[data-category-filter]').forEach(button => button.addEventListener('click', () => { selectedCategory = button.dataset.categoryFilter; render(); }));
   document.querySelectorAll('[data-leader-period]').forEach(button => button.addEventListener('click', () => { leaderboardPeriod = button.dataset.leaderPeriod; render(); }));
